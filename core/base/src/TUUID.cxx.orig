@@ -140,9 +140,6 @@ system clock catches up.
 #include <sys/sysinfo.h>
 #endif
 #include <ifaddrs.h>
-#ifdef R__FBSD
-#include <sys/socket.h>
-#endif
 #include <netinet/in.h>
 #endif
 #include <chrono>

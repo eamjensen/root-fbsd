@@ -180,7 +180,7 @@ extern "C" {
 #   endif
 #   define HAVE_DLADDR
 #endif
-#if defined(R__MACOSX) || defined(R__FBSD)
+#if defined(R__MACOSX)
 #      define HAVE_BACKTRACE_SYMBOLS_FD
 #      define HAVE_DLADDR
 #endif
