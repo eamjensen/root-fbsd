@@ -70,8 +70,8 @@ if(IS_ABSOLUTE ${runtimedir})
 else()
   set(absruntimedir \${CMAKE_INSTALL_PREFIX}/${runtimedir})
 endif()
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE_Development_Main} -m py_compile ${absruntimedir}/cmdLineUtils.py)")
-install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE_Development_Main} -O -m py_compile ${absruntimedir}/cmdLineUtils.py)")
+install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE_Development_Main} -m py_compile \$ENV{DESTDIR}${absruntimedir}/cmdLineUtils.py)")
+install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE_Development_Main} -O -m py_compile \$ENV{DESTDIR}${absruntimedir}/cmdLineUtils.py)")
 configure_file(python/cmdLineUtils.py ${localruntimedir}/cmdLineUtils.py @ONLY)
 
 
@@ -80,7 +80,7 @@ set_source_files_properties(src/rootcling.cxx PROPERTIES
   VISIBILITY_INLINES_HIDDEN "ON"
 )
 
-ROOT_EXECUTABLE(rootcling src/rootcling.cxx LIBRARIES RIO Cling Core Rint)
+ROOT_EXECUTABLE(rootcling src/rootcling.cxx LIBRARIES RIO Cling Core)
 
 # rootcling includes the ROOT complex header which would build the complex
 # dictionary with modules. To make sure that rootcling_stage1 builds this
