@@ -1,5 +1,5 @@
---- main/CMakeLists.txt.orig	2022-11-23 21:41:56.926472000 +0100
-+++ main/CMakeLists.txt	2022-11-23 21:42:23.229615000 +0100
+--- main/CMakeLists.txt.orig	2023-01-02 00:42:50.632810000 +0100
++++ main/CMakeLists.txt	2023-01-02 00:23:34.414799000 +0100
 @@ -70,8 +70,8 @@
  else()
    set(absruntimedir \${CMAKE_INSTALL_PREFIX}/${runtimedir})
