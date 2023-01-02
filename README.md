@@ -18,4 +18,4 @@ Refer to the documentation in the given link and troubleshoot the identification
 
 - [x] Resurrect port devel/root on freshports.org
 - [x] Update to release 6.26/10
-- [ ] Compile against C++17, enabling compilation of experimental ROOT v7 features
+- [x] Compile against C++17, enabling compilation of experimental ROOT v7 features
