@@ -13,7 +13,7 @@
 # so we won't build it if the xml build option is OFF.
 if (xml)
     set(HISTFACTORY_XML_HEADERS RooStats/HistFactory/ConfigParser.h)
-    set(HISTFACTORY_XML_SOURCES src/ConfigParser.cxx src/MakeModelAndMeasurements.cxx)
+    set(HISTFACTORY_XML_SOURCES src/ConfigParser.cxx)
     set(HISTFACTORY_XML_LIBRARIES XMLParser)
 endif()
 
@@ -22,14 +22,11 @@ ROOT_STANDARD_LIBRARY_PACKAGE(HistFactory
     RooStats/HistFactory/Asimov.h
     RooStats/HistFactory/Channel.h
     RooStats/HistFactory/Data.h
-    RooStats/HistFactory/EstimateSummary.h
     RooStats/HistFactory/FlexibleInterpVar.h
     RooStats/HistFactory/HistFactoryException.h
     RooStats/HistFactory/HistFactoryModelUtils.h
     RooStats/HistFactory/HistFactoryNavigation.h
-    RooStats/HistFactory/HistFactorySimultaneous.h
     RooStats/HistFactory/HistoToWorkspaceFactoryFast.h
-    RooStats/HistFactory/HistoToWorkspaceFactory.h
     RooStats/HistFactory/HistRef.h
     RooStats/HistFactory/LinInterpVar.h
     RooStats/HistFactory/MakeModelAndMeasurementsFast.h
@@ -45,14 +42,9 @@ ROOT_STANDARD_LIBRARY_PACKAGE(HistFactory
     src/Asimov.cxx
     src/Channel.cxx
     src/Data.cxx
-    src/EstimateSummary.cxx
     src/FlexibleInterpVar.cxx
-    src/Helper.cxx
-    src/Helper.h
     src/HistFactoryModelUtils.cxx
     src/HistFactoryNavigation.cxx
-    src/HistFactorySimultaneous.cxx
-    src/HistoToWorkspaceFactory.cxx
     src/HistoToWorkspaceFactoryFast.cxx
     src/HistRef.cxx
     src/LinInterpVar.cxx

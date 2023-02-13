@@ -85,10 +85,10 @@ public:
       return {out};
    }
 
-   // funciton returning output shape given input 
+   // function returning output shape given input 
    std::vector<std::vector<size_t>> ShapeInference(std::vector<std::vector<size_t>> input) {
-      // shape of convolution input has to be (according to ONNX): NxCxHxW  
-      // Where N is batch size, C : input  channels, H : input height, W = input width
+      // shape of convolution input has to be (according to ONNX): N x C x H x W  
+      // Where N : batch size, C : input  channels, H : input height, W : input width
    
       if (input.size() > 3 ) {
          throw
@@ -139,7 +139,7 @@ public:
          else if (fDim == 3)
             fAttrPads = {fAttrKernelShape[0] / 2, fAttrKernelShape[1] / 2, fAttrKernelShape[2] / 2,
                          fAttrKernelShape[0] / 2, fAttrKernelShape[1] / 2, fAttrKernelShape[2] / 2};
-         // add extra padding at beginnig or end (depending if SAME_UPPER or SAME_LOWER)
+         // add extra padding at beginning or end (depending if SAME_UPPER or SAME_LOWER)
          // need to check this!
          if (fAttrKernelShape[0] % 2 == 1) {
             (fAttrAutopad == "SAME_UPPER") ? fAttrPads[0]++ : fAttrPads[i1]++;
@@ -174,7 +174,7 @@ public:
       size_t batch_size = input[0][0];        // first element in input tensor
       size_t output_channels = input[1][0];   // first element in weight tensor
 
-      std::vector<std::vector<size_t>> ret({{batch_size, output_channels, output1 }});
+      std::vector<std::vector<size_t>> ret({{ batch_size, output_channels, output1 }});
 
       if (fDim == 1) 
          return ret;
@@ -224,7 +224,8 @@ public:
                std::runtime_error("TMVA SOFIE Conv op Input Tensor " + fNB + " is not found in model");
          }
          fShapeB = model.GetTensorShape(fNB);
-         bool broadcast_needed = (fShapeB.size() != fShapeY.size());
+         std::vector<size_t> targetShape(fShapeY.begin() + 1, fShapeY.end());
+         bool broadcast_needed = !UTILITY::AreSameShape(fShapeB, targetShape);
          if (broadcast_needed) {
             auto original_data = model.GetInitializedTensorData(fNB);
             // make bias shape equal to Y shape by adding 1
@@ -237,16 +238,14 @@ public:
                                            ConvertShapeToString(fShapeB));
             if (fType != "float")
                throw std::runtime_error("TMVA SOFIE Conv op: Broadcasting for non-float type tensors is not supported");
-            
-            // here the acual broadcasting
+            // here is the actual broadcasting
             if (!fUseSession) {
-
-               fShapeB.resize(fShapeY.size(), 1.);
-
+               std::vector<size_t> shape(fDim + 1, 1);
+               shape[0] = fShapeB[0];
                std::shared_ptr<void> new_data_ptr(
-                  UTILITY::Unidirectional_broadcast<float>(static_cast<float *>(original_data.get()), fShapeB, fShapeY),
+                  UTILITY::UnidirectionalBroadcast<float>(static_cast<float *>(original_data.get()), shape, targetShape),
                   std::default_delete<float[]>());
-               model.UpdateInitializedTensor(fNB, model.GetTensorType(fNB), fShapeY, new_data_ptr);
+               model.UpdateInitializedTensor(fNB, model.GetTensorType(fNB), targetShape, new_data_ptr);
                fShapeB = model.GetTensorShape(fNB);
                fNB2 = fNB;   // use same name
             }
@@ -254,48 +253,34 @@ public:
                // In case of session add broadcasting code in Session constructor and in GenerateInitCode
                // we need to add a new intermediate tensor for broadcasted bias tensor
                fNB2 = fNB + "bcast";
-               model.AddIntermediateTensor(fNB2, model.GetTensorType(fNB), fShapeY);
+               model.AddIntermediateTensor(fNB2, model.GetTensorType(fNB), targetShape);
             }
          }
       }
-      }
+   }
 
    std::string GenerateInitCode() {
-
-      size_t oDepth = (fDim > 2) ? fShapeY[2] : 1; // output depth
-      size_t oHeight = (fDim > 1) ? fShapeY[fDim] : 1;  // ouput height
-      size_t oWidth = fShapeY[fDim+1]; // output width
-
       std::stringstream out;
-      // generate initialization code for broadcasting of bias tensor  
-      if (fShapeB.size() != fShapeY.size() && !fNB2.empty() ) {
-         // include a separate scope to avoid defining unique operator temp variables 
-         out << "   {\n"; 
-         out << "      std::vector<size_t> oldShape = " << ConvertShapeToString(fShapeB) << ";\n";
-         out << "      std::vector<size_t> newShape = { " << fShapeY[1] << ", ";
-         if (fDim > 2) out << oDepth << ", ";
-         if (fDim > 1) out << oHeight << ", ";
-         out << oWidth << "};\n";
-         out << "      oldShape.resize(newShape.size(), 1.);\n";
-         std::string original_bias_tensor = "tensor_" + fNB;
-         std::string new_bias_tensor = "tensor_" + fNB2;
-         out << "      float * newData_ptr = TMVA::Experimental::SOFIE::UTILITY::Unidirectional_broadcast<float>("
-             << original_bias_tensor << ", oldShape, newShape);\n";
-         // extend the new broadcasted bias tensor for the batch dimension
-         int length =  fShapeY[1]*oDepth*oHeight*oWidth; // output nc*h*w
-         out << "      for (int i = 0; i < " << fShapeY[0] << " ; i++)\n";
-         out << "         std::copy(newData_ptr, newData_ptr + " << length << ", "
-             <<  new_bias_tensor << " + i * " << length << ");\n";
-         out << "      delete [] newData_ptr;\n";
-         out << "   }\n";
+      // Generate initialization code for broadcasting of bias tensor
+      if (!fNB2.empty()) {
+         // include a separate scope to avoid defining unique operator temp variables
+         std::vector<size_t> shape(fDim + 1, 1);
+         shape[0] = fShapeB[0];
+         std::vector<size_t> targetShape(fShapeY.begin() + 1, fShapeY.end());
+         out << SP << "{\n";
+         out << SP << SP << "float * data = TMVA::Experimental::SOFIE::UTILITY::UnidirectionalBroadcast<float>(tensor_"
+             << fNB << ", " << ConvertShapeToString(shape) << ", " << ConvertShapeToString(fShapeY) << ");\n";
+         out << SP << SP << "std::copy(data, data + " << ConvertShapeToLength(targetShape) << ", tensor_" << fNB2 << ");\n";
+         out << SP << SP << "delete[] data;\n";
+         out << SP << "}\n";
       }
       return out.str();
    }
-   
-   // generate code for Session data members (e.g. internal vectors)
+
+   // Generate code for Session data members (e.g. internal vectors)
    virtual std::string GenerateSessionMembersCode(std::string opName) {
 
-      size_t outputChannelSize = fShapeY[2];  // size/chanhel = D * H * W
+      size_t outputChannelSize = fShapeY[2];  // size/channel = D * H * W
       size_t kernelSize = fAttrKernelShape[0];
       for (size_t i = 1; i < fDim; i++) {
          outputChannelSize *= fShapeY[2 + i];
@@ -437,11 +422,12 @@ public:
             fAttrPads[1] = (fAttrPads[1] + fAttrPads[4]) / 2;
             fAttrPads[2] = (fAttrPads[2] + fAttrPads[5]) / 2;
          }
-      }   
+      }
+      out << SP << SP << "size_t out_offset = n * " << fShapeY[1] * oDepth * oHeight * oWidth << ";\n";
+
       if (fAttrGroup == 1) {
          out << SP << SP << "size_t x_offset = n * " << fShapeX[1] * iHeight * iWidth << ";\n";
-         out << SP << SP << "size_t out_offset = n * " << fShapeY[1] * oHeight * oWidth << ";\n";
-         // when using im2col - resulting matrix is transposed, is (input_c * filter_h * filter_y,  output_h *
+         // when using im2col - resulting matrix is transposed, the dimension is (input_c * filter_h * filter_y,  output_h *
          // output_w)
          if (fDim < 3) {
             out << SP << SP << "TMVA::Experimental::SOFIE::UTILITY::Im2col<float>(tensor_" << fNX
@@ -482,7 +468,7 @@ public:
          // case of group convolution
          // Unroll (IM2COL) the input tensor- make loop on groups and repeat operations (IM2COL + GEMM for each
          // group)
-         out << SP << SP << "size_t out_offset = n * " << fShapeY[1] * oDepth * oHeight * oWidth << ";\n";
+         // out << SP << SP << "size_t out_offset = n * " << fShapeY[1] * oDepth * oHeight * oWidth << ";\n";
          out << SP << SP << "for (size_t g = 0; g < " << fAttrGroup << "; g++) {\n";
          out << SP << SP << "size_t x_offset = n * " << fShapeX[1] * iDepth * iHeight * iWidth << " + g * "
              << fShapeW[1] * iDepth * iHeight * iWidth << ";\n ";
@@ -535,23 +521,24 @@ public:
          out << SP << SP << "}\n"; // end of group loop
       }
 
-      out << SP << "}\n"; // end of batch size loop
-
-    
       if (fNB2 != "") {
-         out << SP << "int " << OpName << "_size = " << fShapeY[0] * fShapeY[1] * oDepth * oHeight * oWidth << ";\n";
+         out << SP << "int " << OpName << "_size = " << fShapeY[1] * oDepth * oHeight * oWidth << ";\n";
          out << SP << "float " << OpName << "_gamma = 1.0;\n";
          out << SP << "int " << OpName << "_incx = 1;\n";
          out << SP << "int " << OpName << "_incy = 1;\n";
 
          out << SP << "BLAS::saxpy_(&" << OpName << "_size, &" << OpName << "_gamma, tensor_" << fNB2 << ", &"
-             << OpName << "_incx, tensor_" << fNY << ", &" << OpName << "_incy);\n";
+             << OpName << "_incx, tensor_" << fNY << " + out_offset, &" << OpName << "_incy);\n";
 
       }
+      out << SP << "}\n"; // end of batch size loop
 
-      
       return out.str();
       }
+
+   /*! \brief Returns the blas routines needed to compile the generated code
+    */
+   std::vector<std::string> GetBlasRoutines() { return {"Gemm", "Axpy"};}
 };
 
 } // namespace SOFIE

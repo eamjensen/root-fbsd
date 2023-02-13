@@ -82,11 +82,11 @@ namespace TStreamerInfoActions {
    private:
       // assignment operator must be the default because the 'copy' constructor is actually a move constructor and must be used.
    public:
-      TConfiguredAction() : fAction(0), fConfiguration(0) {}
+      TConfiguredAction() : fAction(nullptr), fConfiguration(nullptr) {}
       TConfiguredAction(const TConfiguredAction &rval) : TObject(rval), fAction(rval.fAction), fConfiguration(rval.fConfiguration)
       {
          // WARNING: Technically this is a move constructor ...
-         const_cast<TConfiguredAction&>(rval).fConfiguration = 0;
+         const_cast<TConfiguredAction&>(rval).fConfiguration = nullptr;
       }
       TConfiguredAction &operator=(const TConfiguredAction &rval)
       {
@@ -131,7 +131,7 @@ namespace TStreamerInfoActions {
          return fLoopAction(buffer, start_collection, end_collection, loopconf, fConfiguration);
       }
 
-      ClassDef(TConfiguredAction,0); // A configured action
+      ClassDefOverride(TConfiguredAction,0); // A configured action
    };
 
    struct TIDNode;
@@ -180,7 +180,7 @@ namespace TStreamerInfoActions {
       using SequenceGetter_t = SequencePtr(*)(TStreamerInfo *info, TVirtualCollectionProxy *collectionProxy, TClass *originalClass);
 
       TActionSequence(TVirtualStreamerInfo *info, UInt_t maxdata, Bool_t isForVecPtr = kFALSE)
-         : fStreamerInfo(info), fLoopConfig(0)
+         : fStreamerInfo(info), fLoopConfig(nullptr)
       {
          if (isForVecPtr)
             SetBit((UInt_t)EStatusBits::kVectorPtrLooper);
@@ -217,7 +217,7 @@ namespace TStreamerInfoActions {
       TActionSequence *CreateSubSequence(const TIDs &element_ids, size_t offset, SequenceGetter_t create);
       void AddToSubSequence(TActionSequence *sequence, const TIDs &element_ids, Int_t offset, SequenceGetter_t create);
 
-      void Print(Option_t * = "") const;
+      void Print(Option_t * = "") const override;
 
       // Maybe owner unique_ptr
       struct SequencePtr {
@@ -293,7 +293,7 @@ namespace TStreamerInfoActions {
          auto seq = info->GetWriteMemberWiseActions(kFALSE);
          return {seq, kFALSE};
       }
-      ClassDef(TActionSequence,0);
+      ClassDefOverride(TActionSequence,0);
    };
 
 }

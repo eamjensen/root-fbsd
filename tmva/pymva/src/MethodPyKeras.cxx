@@ -16,6 +16,7 @@
 #include "TMVA/Tools.h"
 #include "TMVA/Timer.h"
 #include "TSystem.h"
+#include "Math/Util.h"
 
 using namespace TMVA;
 
@@ -82,6 +83,7 @@ void MethodPyKeras::DeclareOptions() {
    DeclareOptionRef(fNumThreads, "NumThreads", "Number of CPU threads (only for Tensorflow backend)");
    DeclareOptionRef(fGpuOptions, "GpuOptions", "GPU options for tensorflow, such as allow_growth");
    DeclareOptionRef(fUseTFKeras, "tf.keras", "Use tensorflow from Keras");
+   DeclareOptionRef(fUseTFKeras, "tfkeras", "Use tensorflow from Keras");
    DeclareOptionRef(fVerbose, "Verbose", "Keras verbosity during training");
    DeclareOptionRef(fContinueTraining, "ContinueTraining", "Load weights from previous training");
    DeclareOptionRef(fSaveBestOnly, "SaveBestOnly", "Store only weights with smallest validation loss");
@@ -641,8 +643,10 @@ Double_t MethodPyKeras::GetMvaValue(Double_t *errLower, Double_t *errUpper) {
    // Get signal probability (called mvaValue here)
    const TMVA::Event* e = GetEvent();
    for (UInt_t i=0; i<fNVars; i++) fVals[i] = e->GetValue(i);
-   PyRunString("for i,p in enumerate(model.predict(vals)): output[i]=p\n",
-               "Failed to get predictions");
+   int verbose = (int) Verbose();
+   std::string code = "for i,p in enumerate(model.predict(vals, verbose=" + ROOT::Math::Util::ToString(verbose)
+                    + ")): output[i]=p\n";
+   PyRunString(code,"Failed to get predictions");
 
    return fOutput[TMVA::Types::kSignal];
 }
@@ -719,8 +723,10 @@ std::vector<Float_t>& MethodPyKeras::GetRegressionValues() {
    // Get regression values
    const TMVA::Event* e = GetEvent();
    for (UInt_t i=0; i<fNVars; i++) fVals[i] = e->GetValue(i);
-   PyRunString("for i,p in enumerate(model.predict(vals)): output[i]=p\n",
-               "Failed to get predictions");
+   int verbose = (int) Verbose();
+   std::string code = "for i,p in enumerate(model.predict(vals, verbose=" + ROOT::Math::Util::ToString(verbose)
+                    + ")): output[i]=p\n";
+   PyRunString(code,"Failed to get predictions");
 
    // Use inverse transformation of targets to get final regression values
    Event * eTrans = new Event(*e);
@@ -747,8 +753,10 @@ std::vector<Float_t>& MethodPyKeras::GetMulticlassValues() {
    // Get class probabilites
    const TMVA::Event* e = GetEvent();
    for (UInt_t i=0; i<fNVars; i++) fVals[i] = e->GetValue(i);
-   PyRunString("for i,p in enumerate(model.predict(vals)): output[i]=p\n",
-               "Failed to get predictions");
+   int verbose = (int) Verbose();
+   std::string code = "for i,p in enumerate(model.predict(vals, verbose=" + ROOT::Math::Util::ToString(verbose)
+                    + ")): output[i]=p\n";
+   PyRunString(code,"Failed to get predictions");
 
    return fOutput;
 }

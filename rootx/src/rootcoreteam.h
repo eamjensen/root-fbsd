@@ -23,13 +23,13 @@ const char *gROOTCoreTeam[] = {
    "Bertrand Bellenot",
    "Gerardo Ganis",
    "Guilherme Amadio",
-   "Wouter Verkerke",
-   "Pere Mato Vila",
    "Jakob Blomer",
+   "Wouter Verkerke",
+   "Jonas Rembser",
+   "Pere Mato Vila",
    "Timur Pocheptsov",
    "Stephan Hageboeck",
    "Matevz Tadel",
-   "Enric Tejedor Saavedra",
    0 };
 
 } // namespace ROOTX

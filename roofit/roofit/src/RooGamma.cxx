@@ -80,7 +80,7 @@ RooGamma::RooGamma(const RooGamma& other, const char* name) :
 
 ////////////////////////////////////////////////////////////////////////////////
 
-Double_t RooGamma::evaluate() const
+double RooGamma::evaluate() const
 {
   return TMath::GammaDist(x, gamma, mu, beta) ;
 }
@@ -104,18 +104,18 @@ Int_t RooGamma::getAnalyticalIntegral(RooArgSet& allVars, RooArgSet& analVars, c
 
 ////////////////////////////////////////////////////////////////////////////////
 
-Double_t RooGamma::analyticalIntegral(Int_t code, const char* rangeName) const
+double RooGamma::analyticalIntegral(Int_t code, const char* rangeName) const
 {
   R__ASSERT(code==1) ;
 
  //integral of the Gamma distribution via ROOT::Math
-  Double_t integral = ROOT::Math::gamma_cdf(x.max(rangeName), gamma, beta, mu) - ROOT::Math::gamma_cdf(x.min(rangeName), gamma, beta, mu);
+  double integral = ROOT::Math::gamma_cdf(x.max(rangeName), gamma, beta, mu) - ROOT::Math::gamma_cdf(x.min(rangeName), gamma, beta, mu);
   return integral ;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-Int_t RooGamma::getGenerator(const RooArgSet& directVars, RooArgSet &generateVars, Bool_t /*staticInitOK*/) const
+Int_t RooGamma::getGenerator(const RooArgSet& directVars, RooArgSet &generateVars, bool /*staticInitOK*/) const
 {
   if (matchArgs(directVars,generateVars,x)) return 1 ;
   return 0 ;

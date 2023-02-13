@@ -286,7 +286,7 @@ Int_t TChain::Add(TChain* chain)
 /// - Tagging the name of the tree with a slash (e.g. \p /tree_name ) is only
 ///   supported for backward compatibility; it requires the file name to contain
 ///   the string '.root' and its use is deprecated. Instead, use the form
-///   \p ?#tree_name (that is an "?" followed by an empty query), for example:
+///   \p ?#%tree_name (that is an "?" followed by an empty query), for example:
 ///   ~~~{.cpp}
 ///   TChain c;
 ///   // DO NOT DO THIS
@@ -1873,7 +1873,7 @@ void TChain::ls(Option_t* option) const
 /// ~~~ {.cpp}
 ///     TFile* file = TFile::Open("newfile.root", "RECREATE");
 ///     file->mkdir("mydir")->cd();
-///     ch.Merge(file);
+///     ch.Merge(file, 0);
 /// ~~~
 
 Long64_t TChain::Merge(const char* name, Option_t* option)
@@ -1938,7 +1938,7 @@ Long64_t TChain::Merge(TCollection* /* list */, TFileMergeInfo *)
 /// ~~~ {.cpp}
 ///     TFile* file = TFile::Open("newfile.root", "RECREATE");
 ///     file->mkdir("mydir")->cd();
-///     ch.Merge(file);
+///     ch.Merge(file, 0);
 /// ~~~
 /// If 'option' contains the word 'fast' the merge will be done without
 /// unzipping or unstreaming the baskets (i.e., a direct copy of the raw
@@ -2126,7 +2126,7 @@ Long64_t TChain::Merge(TFile* file, Int_t basketsize, Option_t* option)
 ///     [xxx://host]/a/path/file#treename
 /// ~~~
 /// i.e. anchor but no options (query), the filename will be the full path, as
-/// the anchor may be the internal file name of an archive. Use '?#treename' to
+/// the anchor may be the internal file name of an archive. Use '?#%treename' to
 /// pass the treename if the query field is empty.
 ///
 /// \param[in] name        is the original name
@@ -2398,19 +2398,7 @@ void TChain::SavePrimitive(std::ostream &out, Option_t *option)
    }
    out << std::endl;
 
-   if (GetMarkerColor() != 1) {
-      if (GetMarkerColor() > 228) {
-         TColor::SaveColor(out, GetMarkerColor());
-         out << "   " << chName.Data() << "->SetMarkerColor(ci);" << std::endl;
-      } else
-         out << "   " << chName.Data() << "->SetMarkerColor(" << GetMarkerColor() << ");" << std::endl;
-   }
-   if (GetMarkerStyle() != 1) {
-      out << "   " << chName.Data() << "->SetMarkerStyle(" << GetMarkerStyle() << ");" << std::endl;
-   }
-   if (GetMarkerSize() != 1) {
-      out << "   " << chName.Data() << "->SetMarkerSize(" << GetMarkerSize() << ");" << std::endl;
-   }
+   SaveMarkerAttributes(out, chName.Data(), 1, 1, 1);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

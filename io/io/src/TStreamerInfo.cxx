@@ -1343,7 +1343,7 @@ namespace {
       Int_t oldv = oldClass->GetStreamerInfo()->GetClassVersion();
 
       if (newClass->GetStreamerInfos() && oldv < newClass->GetStreamerInfos()->GetSize() && newClass->GetStreamerInfos()->At(oldv) && strcmp(newClass->GetStreamerInfos()->At(oldv)->GetName(), oldClass->GetName()) != 0) {
-         // The new class has already a TStreamerInfo for the the same version as
+         // The new class has already a TStreamerInfo for the same version as
          // the old class and this was not the result of an import.  So we do not
          // have a match
          return kFALSE;
@@ -3034,14 +3034,12 @@ Bool_t TStreamerInfo::CompareContent(TClass *cl, TVirtualStreamerInfo *info, Boo
 
    TMemberInfo local(GetClass());
    TMemberInfo other(cl ? cl : info->GetClass());
-   UInt_t idx = 0;
    while(!done) {
       local.Clear();
       other.Clear();
       el = (TStreamerElement*)next();
       while (el && (el->IsBase() || el->IsA() == TStreamerArtificial::Class())) {
          el = (TStreamerElement*)next();
-         ++idx;
       }
       if (el) {
          local.SetName( el->GetName() );
@@ -3119,7 +3117,6 @@ Bool_t TStreamerInfo::CompareContent(TClass *cl, TVirtualStreamerInfo *info, Boo
          result = result && kFALSE;
          if (!complete) return result;
       }
-      ++idx;
    }
    return result;
 }
@@ -3484,15 +3481,8 @@ static void R__WriteMoveBodyPointersArrays(FILE *file, const TString &protoname,
             if (element->GetArrayDim() == 1) {
                fprintf(file,"   for (Int_t i=0;i<%d;i++) %s[i] = rhs.%s[i];\n",element->GetArrayLength(),ename,ename);
             } else if (element->GetArrayDim() >= 2) {
-               fprintf(file,"   for (Int_t i=0;i<%d;i++) (&(%s",element->GetArrayLength(),ename);
-               for (Int_t d = 0; d < element->GetArrayDim(); ++d) {
-                  fprintf(file,"[0]");
-               }
-               fprintf(file,"))[i] = (&(rhs.%s",ename);
-               for (Int_t d = 0; d < element->GetArrayDim(); ++d) {
-                  fprintf(file,"[0]");
-               }
-               fprintf(file,"))[i];\n");
+               fprintf(file,"   for (Int_t i=0;i<%d;i++) reinterpret_cast<%s *>(%s", element->GetArrayLength(), element->GetTypeName(), ename);
+               fprintf(file,")[i] = reinterpret_cast<%s const *>(rhs.%s)[i];\n", element->GetTypeName(), ename);
             }
          } else if (element->GetType() == TVirtualStreamerInfo::kSTLp) {
             if (!defMod) { fprintf(file,"   %s &modrhs = const_cast<%s &>( rhs );\n",protoname.Data(),protoname.Data()); defMod = kTRUE; };
@@ -4092,13 +4082,12 @@ Int_t TStreamerInfo::GenerateHeaderFile(const char *dirname, const TList *subCla
    TMakeProject::GenerateForwardDeclaration(fp, GetName(), inclist, kFALSE, needGenericTemplate, extrainfos);
    fprintf(fp,"\n");
 
-   UInt_t ninc = 0;
-   ninc += GenerateIncludes(fp, inclist, extrainfos);
+   GenerateIncludes(fp, inclist, extrainfos);
    if (subClasses) {
       TIter subnext(subClasses);
       TStreamerInfo *subinfo;
       while ((subinfo = (TStreamerInfo*)subnext())) {
-         ninc = subinfo->GenerateIncludes(fp, inclist, extrainfos);
+         subinfo->GenerateIncludes(fp, inclist, extrainfos);
       }
    }
    fprintf(fp,"\n");
