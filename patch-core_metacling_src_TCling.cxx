@@ -1,5 +1,5 @@
---- core/metacling/src/TCling.cxx.orig	2023-01-02 00:42:50.610669000 +0100
-+++ core/metacling/src/TCling.cxx	2023-01-02 00:23:34.411972000 +0100
+--- core/metacling/src/TCling.cxx.orig	2023-02-13 16:21:06.798359000 +0100
++++ core/metacling/src/TCling.cxx	2023-02-13 16:21:06.794727000 +0100
 @@ -1249,6 +1249,8 @@
           true
  #elif defined(R__MACOSX)
@@ -9,7 +9,7 @@
  #else // Windows
           false
  #endif
-@@ -3351,6 +3353,8 @@
+@@ -3366,6 +3368,8 @@
     dl_iterate_phdr(callback_for_dl_iterate_phdr, &newLibs);
     for (auto &&lib: newLibs)
        RegisterLoadedSharedLibrary(lib.c_str());
