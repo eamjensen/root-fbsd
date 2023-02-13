@@ -10,13 +10,8 @@
  * listed in LICENSE (http://roofit.sourceforge.net/license.txt)
  */
 
-<<<<<<<< HEAD:roofit/hs3/inc/RooFitHS3/JSONInterface.h
-#ifndef RooFitHS3_JSONInterface_h
-#define RooFitHS3_JSONInterface_h
-========
 #ifndef RooFit_Detail_JSONInterface_h
 #define RooFit_Detail_JSONInterface_h
->>>>>>>> v6-28-00:roofit/jsoninterface/inc/RooFit/Detail/JSONInterface.h
 
 #include <iostream>
 #include <memory>
@@ -25,7 +20,7 @@
 #include <vector>
 
 namespace RooFit {
-namespace Experimental {
+namespace Detail {
 
 class JSONNode {
 public:
@@ -130,13 +125,6 @@ public:
    virtual const JSONNode &child(size_t pos) const = 0;
 };
 
-<<<<<<<< HEAD:roofit/hs3/inc/RooFitHS3/JSONInterface.h
-} // namespace Experimental
-} // namespace RooFit
-
-class JSONTree {
-   virtual RooFit::Experimental::JSONNode &rootnode() = 0;
-========
 class JSONTree {
 public:
    virtual ~JSONTree() = default;
@@ -145,21 +133,9 @@ public:
 
    static std::unique_ptr<JSONTree> create();
    static std::unique_ptr<JSONTree> create(std::istream &is);
->>>>>>>> v6-28-00:roofit/jsoninterface/inc/RooFit/Detail/JSONInterface.h
 };
 
-std::ostream &operator<<(std::ostream &os, RooFit::Experimental::JSONNode const &s);
-template <class T>
-std::vector<T> &operator<<(std::vector<T> &v, RooFit::Experimental::JSONNode const &n)
-{
-   if (!n.is_seq()) {
-      throw std::runtime_error("node " + n.key() + " is not of sequence type!");
-   }
-   for (const auto &e : n.children()) {
-      v.push_back(e.val_t<T>());
-   }
-   return v;
-}
+std::ostream &operator<<(std::ostream &os, RooFit::Detail::JSONNode const &s);
 
 template <class T>
 std::vector<T> &operator<<(std::vector<T> &v, RooFit::Detail::JSONNode::children_view const &cv)

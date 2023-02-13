@@ -61,16 +61,6 @@ class TestRooDataSetNumpy(unittest.TestCase):
             np.testing.assert_almost_equal(np_data["x"][i], x_in_data.getVal(), decimal=10)
             self.assertEqual(np_data["cat"][i], cat_in_data.getIndex())
 
-    def _check_value_equality(self, data, np_data):
-        vars_in_data = data.get()
-        x_in_data = vars_in_data["x"]
-        cat_in_data = vars_in_data["cat"]
-
-        for i in range(data.numEntries()):
-            data.get(i)
-            np.testing.assert_almost_equal(np_data["x"][i], x_in_data.getVal(), decimal=10)
-            self.assertEqual(np_data["cat"][i], cat_in_data.getIndex())
-
     def test_to_numpy_and_from_numpy(self):
         """Test exporting to numpy and then importing back a non-weighted dataset."""
 

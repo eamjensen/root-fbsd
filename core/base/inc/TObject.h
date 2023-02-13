@@ -177,16 +177,6 @@ public:
    /// \return true if this object's destructor has been run.
    Bool_t IsDestructed() const { return !TestBit(kNotDeleted); }
 
-   /// IsDestructed
-   ///
-   /// \note This function must be non-virtual as it can be used on destructed (but
-   /// not yet modified) memory.  This is used for example in TClonesArray to record
-   /// the element that have been destructed but not deleted and thus are ready for
-   /// re-use (by operator new with placement).
-   ///
-   /// \return true if this object's destructor has been run.
-   Bool_t IsDestructed() const { return !TestBit(kNotDeleted); }
-
    //----- operators
    void    *operator new(size_t sz) { return TStorage::ObjectAlloc(sz); }
    void    *operator new[](size_t sz) { return TStorage::ObjectAllocArray(sz); }

@@ -56,8 +56,6 @@ public:
 
   void computeBatch(cudaStream_t*, double* output, size_t nEvents, RooFit::Detail::DataMap const&) const override;
 
-  void computeBatch(cudaStream_t*, double* output, size_t nEvents, RooFit::Detail::DataMap const&) const;
-
 protected:
 
   RooArgList   _ownedList ;      ///< List of owned components
