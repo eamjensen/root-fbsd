@@ -1,1 +1,1 @@
-cmake -GNinja -Dgnuinstall=ON -Dsoversion=ON ../latest-stable
+export ROOTSYS=$PWD ; cmake -GNinja -DCMAKE_CXX_STANDARD=17 -Dgnuinstall=ON -Dsoversion=ON -Droot7=ON ../latest-stable
