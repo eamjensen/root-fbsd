@@ -77,9 +77,7 @@ The structure of a directory is shown in TDirectoryFile::TDirectoryFile
 #include <sys/stat.h>
 #ifndef WIN32
 #include <unistd.h>
-#ifndef R__FBSD
 #include <sys/xattr.h>
-#endif
 #else
 #   define ssize_t int
 #   include <io.h>
@@ -4069,7 +4067,7 @@ TFile *TFile::Open(const char *url, Option_t *options, const char *ftitle,
    TString expandedUrl(url);
    gSystem->ExpandPathName(expandedUrl);
 
-#if defined(R__UNIX) && !defined(R__FBSD)
+#ifdef R__UNIX
    // If URL is a file on an EOS FUSE mount, attempt redirection to XRootD protocol.
    if (gEnv->GetValue("TFile.CrossProtocolRedirects", 1) == 1) {
       TUrl fileurl(expandedUrl, /* default is file */ kTRUE);
