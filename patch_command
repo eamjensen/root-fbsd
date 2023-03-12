@@ -1,0 +1,1 @@
+WRKSRC=/path/to/git/cloned/repo make makepatch
