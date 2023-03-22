@@ -65,14 +65,16 @@ endfunction()
 
 #---Tutorials disabled depending on the build components-------------
 if(NOT ROOT_minuit2_FOUND)
-  set(minuit2_veto fit/fit2dHist.C fit/fit2dHist.C
-                   fit/fitCircle.C fit/minuit2FitBench2D.C
+  set(minuit2_veto fit/fit2dHist.C fit/fitCircle.C
                    fit/minuit2FitBench2D.C fit/minuit2FitBench.C
-                   fit/minuit2FitBench.C fit/minuit2GausFit.C
                    fit/minuit2GausFit.C fit/NumericalMinimization.C
                    fit/combinedFit.C fit/TestBinomial.C
                    fit/fitNormSum.C fit/vectorizedFit.C
                    tutorials/roostats/rs_bernsteinCorrection.C)
+endif()
+
+if(NOT clad)
+  set(clad_veto fit/minuit2GausFit.C)
 endif()
 
 if (NOT dataframe)
@@ -183,13 +185,22 @@ if(NOT ROOT_r_FOUND)
   set(r_veto  r/*.C)
 endif()
 
-if(WIN32)
-  set(histfactory_veto histfactory/*.C
-                       roostats/StandardFrequentistDiscovery.C) # histfactory doesn't work on Windows
-else()
-  set(histfactory_veto histfactory/makeExample.C)
+# The following tests use hist2workspace, which requires xml
+if(NOT ROOT_xml_FOUND)
+  list(APPEND xml_veto roostats/OneSidedFrequentistUpperLimitWithBands.C
+                       roostats/StandardBayesianMCMCDemo.C
+                       roostats/StandardBayesianNumericalDemo.C
+                       roostats/StandardFeldmanCousinsDemo.C
+                       roostats/StandardFrequentistDiscovery.C
+                       roostats/StandardHistFactoryPlotsWithCategories.C
+                       roostats/StandardHypoTestDemo.C
+                       roostats/StandardHypoTestInvDemo.C
+                       roostats/StandardProfileInspectorDemo.C
+                       roostats/StandardProfileLikelihoodDemo.C
+                       roostats/StandardTestStatDistributionDemo.C
+                       roostats/TwoSidedFrequentistUpperLimitWithBands.C)
 endif()
-
+set(histfactory_veto histfactory/makeExample.C)
 
 if(NOT ROOT_fitsio_FOUND)
   set(fitsio_veto  fitsio/*.C)
@@ -443,6 +454,7 @@ set(all_veto hsimple.C
              ${spectrum_veto}
              ${dataframe_veto}
              ${macm1_veto}
+             ${clad_veto}
              )
 
 file(GLOB_RECURSE tutorials RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.C)
@@ -743,9 +755,6 @@ if(ROOT_pyroot_FOUND)
   if(NOT PY_KERAS_FOUND)
     file(GLOB tmva_veto_py RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} tmva/keras/*.py)
     list(APPEND pyveto ${tmva_veto_py})
-  else()
-  list(APPEND pyveto tmva/keras/RegressionKeras.py)
-  list(APPEND pyveto tmva/keras/ApplicationRegressionKeras.py)
   endif()
 
   find_python_module(torch QUIET)

@@ -1,4 +1,4 @@
-// https://root.cern/js/ v7.3.0
+// https://root.cern/js/ v7.3.1
 (function (global, factory) {
 typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
 typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -11,7 +11,7 @@ let version_id = '7.3.x';
 
 /** @summary version date
   * @desc Release date in format day/month/year like '14/04/2022' */
-let version_date = '19/12/2022';
+let version_date = '23/02/2023';
 
 /** @summary version id and date
   * @desc Produced by concatenation of {@link version_id} and {@link version_date}
@@ -8237,8 +8237,8 @@ class BasePainter {
       }
 
       let rect_origin = getElementRect(main_origin, true),
-         can_resize = main_origin.attr('can_resize'),
-         do_resize = false;
+          can_resize = main_origin.attr('can_resize'),
+          do_resize = false;
 
       if (can_resize == 'height')
          if (height_factor && Math.abs(rect_origin.width * height_factor - rect_origin.height) > 0.1 * rect_origin.width) do_resize = true;
@@ -8258,17 +8258,26 @@ class BasePainter {
       }
 
       let rect = getElementRect(main),
-          old_h = main.property('draw_height'),
-          old_w = main.property('draw_width');
+          old_h = main.property('_jsroot_height'),
+          old_w = main.property('_jsroot_width');
 
       rect.changed = false;
 
       if (old_h && old_w && (old_h > 0) && (old_w > 0)) {
          if ((old_h !== rect.height) || (old_w !== rect.width))
-            if ((check_level > 1) || (rect.width / old_w < 0.66) || (rect.width / old_w > 1.5) ||
-               (rect.height / old_h < 0.66) && (rect.height / old_h > 1.5)) rect.changed = true;
+            rect.changed = (check_level > 1) || (rect.width / old_w < 0.9) || (rect.width / old_w > 1.1) ||
+                           (rect.height / old_h < 0.9) || (rect.height / old_h > 1.1);
       } else {
          rect.changed = true;
+      }
+
+      if (rect.changed)
+         main.property('_jsroot_height', rect.height).property('_jsroot_width', rect.width);
+
+      // after change enlarge state always mark main element as resized
+      if (main_origin.property('did_enlarge')) {
+         rect.changed = true;
+         main_origin.property('did_enlarge', false);
       }
 
       return rect;
@@ -8325,7 +8334,7 @@ class BasePainter {
             enlarge.node().appendChild(main.node().firstChild);
 
          origin.property('use_enlarge', true);
-
+         origin.property('did_enlarge', true);
          return true;
       }
       if ((action === false) && (state !== 'off')) {
@@ -8335,6 +8344,7 @@ class BasePainter {
 
          enlarge.remove();
          origin.property('use_enlarge', false);
+         origin.property('did_enlarge', true);
          return true;
       }
 
@@ -44685,7 +44695,7 @@ class TAxisPainter extends ObjectPainter {
 
             if (center_lbls) {
                let gap = arg.gap_after || arg.gap_before;
-               pos = Math.round(pos - (this.vertical ? 0.5*gap : -0.5*gap));
+               pos = Math.round(pos - ((this.vertical != this.reverse) ? 0.5*gap : -0.5*gap));
                if ((pos < -5) || (pos > (this.vertical ? h : w) + 5)) continue;
             }
 
@@ -48101,7 +48111,7 @@ class JSRootMenu {
          this.addchk(align[n] == obj.fTextAlign,
             align[n], align[n],
             // align[n].toString() + '_h:' + hnames[Math.floor(align[n]/10) - 1] + '_v:' + vnames[align[n]%10-1], align[n],
-            function(arg) { this.getObject().fTextAlign = parseInt(arg); this.interactiveRedraw(true, `exec:SetTextAlign(${arg})`); }.bind(painter));
+            function(arg) { this.getObject().fTextAlign = parseInt(arg); this.interactiveRedraw('pad', `exec:SetTextAlign(${arg})`); }.bind(painter));
       }
       this.add('endsub:');
 
@@ -48275,7 +48285,8 @@ class JSRootMenu {
             arg => { faxis.fLabelColor = arg; painter.interactiveRedraw('pad', getColorExec(arg, 'SetLabelColor'), kind); });
       this.addSizeMenu('Offset', 0, 0.1, 0.01, faxis.fLabelOffset,
             arg => { faxis.fLabelOffset = arg; painter.interactiveRedraw('pad', `exec:SetLabelOffset(${arg})`, kind); });
-      this.addSizeMenu('Size', 0.02, 0.11, 0.01, faxis.fLabelSize,
+      let a = faxis.fLabelSize >= 1;
+      this.addSizeMenu('Size', a ? 2 : 0.02, a ? 30 : 0.11, a ? 2 : 0.01, faxis.fLabelSize,
             arg => { faxis.fLabelSize = arg; painter.interactiveRedraw('pad', `exec:SetLabelSize(${arg})`, kind); });
       this.add('endsub:');
       this.add('sub:Title');
@@ -48295,7 +48306,8 @@ class JSRootMenu {
             arg => { faxis.fTitleColor = arg; painter.interactiveRedraw('pad', getColorExec(arg, 'SetTitleColor'), kind); });
       this.addSizeMenu('Offset', 0, 3, 0.2, faxis.fTitleOffset,
                       arg => { faxis.fTitleOffset = arg; painter.interactiveRedraw('pad', `exec:SetTitleOffset(${arg})`, kind); });
-      this.addSizeMenu('Size', 0.02, 0.11, 0.01, faxis.fTitleSize,
+      a = faxis.fTitleSize >= 1;
+      this.addSizeMenu('Size', a ? 2 : 0.02, a ? 30 : 0.11, a ? 2 : 0.01, faxis.fTitleSize,
                       arg => { faxis.fTitleSize = arg; painter.interactiveRedraw('pad', `exec:SetTitleSize(${arg})`, kind); });
       this.add('endsub:');
       this.add('sub:Ticks');
@@ -55482,30 +55494,27 @@ class TPadPainter extends ObjectPainter {
       if (!r.ranges || p.empty()) return true;
 
       // calculate user range for full pad
-      const same = x => x,
-            direct_funcs = [same, Math.log10, x => Math.log10(x)/Math.log10(2)],
-            revert_funcs = [same, x => Math.pow(10, x), x => Math.pow(2, x)],
-            match = (v1, v0, range) => (Math.abs(v0-v1) < Math.abs(range)*1e-10) ? v0 : v1,
-            frect = main.getFrameRect();
+      const func = (log, value, err) => {
+         if (!log) return value;
+         if (value <= 0) return err;
+         value = Math.log10(value);
+         if (log > 1) value = value/Math.log10(log);
+         return value;
+      }, frect = main.getFrameRect();
 
-      let func = direct_funcs[main.logx],
-          func2 = revert_funcs[main.logx],
-          k = (func(main.scale_xmax) - func(main.scale_xmin))/frect.width,
-          x1 = func(main.scale_xmin) - k*frect.x,
-          x2 = x1 + k*this.getPadWidth();
+      r.ux1 = func(main.logx, r.ux1, 0);
+      r.ux2 = func(main.logx, r.ux2, 1);
 
-      r.px1 = match(func2(x1), r.px1, r.ux2-r.ux1);
-      r.px2 = match(func2(x2), r.px2, r.ux2-r.ux1);
+      let k = (r.ux2 - r.ux1)/(frect.width || 10);
+      r.px1 = r.ux1 - k*frect.x;
+      r.px2 = r.px1 + k*this.getPadWidth();
 
-      func = direct_funcs[main.logy];
-      func2 = revert_funcs[main.logy];
+      r.uy1 = func(main.logy, r.uy1, 0);
+      r.uy2 = func(main.logy, r.uy2, 1);
 
-      k = (func(main.scale_ymax) - func(main.scale_ymin))/frect.height;
-      let y2 = func(main.scale_ymax) + k*frect.y,
-          y1 = y2 - k*this.getPadHeight();
-
-      r.py1 = match(func2(y1), r.py1, r.uy2-r.uy1);
-      r.py2 = match(func2(y2), r.py2, r.uy2-r.uy1);
+      k = (r.uy2 - r.uy1)/(frect.height || 10);
+      r.py1 = r.uy1 - k*frect.y;
+      r.py2 = r.py1 + k*this.getPadHeight();
 
       return true;
    }
@@ -57609,7 +57618,7 @@ class TPavePainter extends ObjectPainter {
          menu.add('sub:SetOptStat', () => {
             menu.input('Enter OptStat', pave.fOptStat, 'int').then(fmt => {
                pave.fOptStat = fmt;
-               this.interactiveRedraw(true, `exec:SetOptStat(${fmt}`);
+               this.interactiveRedraw(true, `exec:SetOptStat(${fmt})`);
             });
          });
          function AddStatOpt(pos, name) {
@@ -58531,7 +58540,11 @@ class THistDrawOptions {
          if (this.y3dscale !== 1) res += '_Y3DSC' + Math.round(this.y3dscale * 100);
 
       } else {
-         if (this.Scat) {
+         if (this.Candle) {
+            res = 'CANDLE' + this.Candle;
+         } else if (this.Violin) {
+            res = 'VIOLIN' + this.Violin;
+         } else if (this.Scat) {
             res = 'SCAT';
          } else if (this.Color) {
             res = 'COL';
@@ -61132,19 +61145,21 @@ class TH1Painter$2 extends THistPainter {
       if (funcs.swap_xy)
          [pnt_x, pnt_y, width, height] = [pnt_y, pnt_x, height, width];
 
+      let descent_order = funcs.swap_xy != pmain.x_handle.reverse;
+
       while (l < r-1) {
          let m = Math.round((l+r)*0.5), xx = GetBinGrX(m);
          if ((xx === null) || (xx < pnt_x - 0.5)) {
-            if (funcs.swap_xy) r = m; else l = m;
+            if (descent_order) r = m; else l = m;
          } else if (xx > pnt_x + 0.5) {
-            if (funcs.swap_xy) l = m; else r = m;
+            if (descent_order) l = m; else r = m;
          } else { l++; r--; }
       }
 
       findbin = r = l;
       grx1 = GetBinGrX(findbin);
 
-      if (pmain.swap_xy) {
+      if (descent_order) {
          while ((l > left) && (GetBinGrX(l-1) < grx1 + 2)) --l;
          while ((r < right) && (GetBinGrX(r+1) > grx1 - 2)) ++r;
       } else {
@@ -89183,7 +89198,7 @@ class THStackPainter extends ObjectPainter {
       let max0 = max, min0 = min, zoomed = false;
 
       if (stack.fMaximum != kNoZoom) {
-         max = stack.fMaximum*(1 + gStyle.fHistTopMargin);
+         max = stack.fMaximum;
          max0 = Math.max(max, max0);
          zoomed = true;
       }
@@ -91983,10 +91998,10 @@ class TGraphPainter$1 extends ObjectPainter {
       if ((method.fName == 'RemovePoint') || (method.fName == 'InsertPoint')) {
          if (!canp || canp._readonly) return true; // ignore function
 
-         let hint = this.extractTooltip(pnt);
+         let pnt = isFunc(pmain?.getLastEventPos) ? pmain.getLastEventPos() : null,
+             hint = this.extractTooltip(pnt);
 
          if (method.fName == 'InsertPoint') {
-            let pnt = isFunc(pmain.getLastEventPos) ? pmain.getLastEventPos() : null;
             if (pnt) {
                let funcs = pmain.getGrFuncs(this.options.second_x, this.options.second_y),
                    userx = funcs.revertAxis('x', pnt.x) ?? 0,
@@ -92858,9 +92873,11 @@ class TRatioPlotPainter extends ObjectPainter {
             up_fp._ratio_painter = this;
 
             up_fp.zoom = function(xmin,xmax,ymin,ymax,zmin,zmax) {
-               this._ratio_painter.setGridsRange(xmin, xmax);
-               this._ratio_low_fp.o_zoom(xmin,xmax);
-               return this.o_zoom(xmin,xmax,ymin,ymax,zmin,zmax);
+               return this.o_zoom(xmin,xmax,ymin,ymax,zmin,zmax).then(res => {
+                  this._ratio_painter.setGridsRange(up_fp.scale_xmin, up_fp.scale_xmax);
+                  this._ratio_low_fp.o_zoom(up_fp.scale_xmin, up_fp.scale_xmax);
+                  return res;
+               });
             };
 
             up_fp.o_sizeChanged = up_fp.sizeChanged;
@@ -97906,6 +97923,11 @@ class RPadPainter extends RObjectPainter {
          this.alignButtons(btns, rect.width, rect.height);
 
       return true;
+   }
+
+   /** @summary Draw item name on canvas, dummy for RPad
+     * @private */
+   drawItemNameOnCanvas() {
    }
 
    /** @summary Enlarge pad draw element when possible */

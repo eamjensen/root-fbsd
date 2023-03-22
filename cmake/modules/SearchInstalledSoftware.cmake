@@ -157,7 +157,7 @@ if(builtin_freetype)
       URL ${CMAKE_SOURCE_DIR}/graf2d/freetype/src/freetype-${freetype_version}.tar.gz
       URL_HASH SHA256=efe71fd4b8246f1b0b1b9bfca13cfff1c9ad85930340c27df469733bbb620938
       INSTALL_DIR ${CMAKE_BINARY_DIR}
-      CMAKE_ARGS -G ${CMAKE_GENERATOR} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}
+      CMAKE_ARGS -G ${CMAKE_GENERATOR} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DFT_DISABLE_BZIP2=TRUE
       BUILD_COMMAND ${CMAKE_COMMAND} --build . --config ${freetypebuild}
       INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different ${freetypebuild}/freetype.lib ${FREETYPE_LIBRARY}
       LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 BUILD_IN_SOURCE 0
@@ -1037,6 +1037,16 @@ if(xrootd AND XROOTD_VERSIONNUM VERSION_LESS 500000000)
   set(netx ON)
 else()
   set(netx OFF)
+endif()
+
+#---make sure non-builtin xrootd is not using builtin_openssl-----------
+if(xrootd AND NOT builtin_xrootd AND builtin_openssl)
+  if(fail-on-missing)
+    message(FATAL_ERROR "Non-builtin XROOTD must not be used with builtin OpenSSL. If you want to use non-builtin XROOTD, please use the system OpenSSL")
+  else()
+    message(STATUS "Non-builtin XROOTD must not be used with builtin OpenSSL. Disabling the 'xrootd' option.")
+    set(xrootd OFF CACHE BOOL "Disabled because non-builtin xrootd cannot be used with builtin OpenSSL" FORCE)
+  endif()
 endif()
 
 #---Alien support----------------------------------------------------------------

@@ -45,6 +45,7 @@
 #include "TGaxis.h"
 #include "TColor.h"
 #include "TPainter3dAlgorithms.h"
+#include "TGraph2D.h"
 #include "TGraph2DPainter.h"
 #include "TGraphDelaunay2D.h"
 #include "TView.h"
@@ -6892,18 +6893,16 @@ void THistPainter::PaintHist(Option_t *)
 
    //         Code option for GrapHist
 
-   if (Hoption.Line) chopth[0] = 'L';
-   if (Hoption.Star) chopth[1] = '*';
-   if (Hoption.Mark) chopth[2] = 'P';
+   if (Hoption.Line)       chopth[0] = 'L';
+   if (Hoption.Star)       chopth[1] = '*';
+   if (Hoption.Mark)       chopth[2] = 'P';
    if (Hoption.Mark == 10) chopth[3] = '0';
    if (Hoption.Line || Hoption.Curve || Hoption.Hist || Hoption.Bar) {
       if (Hoption.Curve)    chopth[3] = 'C';
       if (Hoption.Hist > 0) chopth[4] = 'H';
       else if (Hoption.Bar) chopth[5] = 'B';
+      if (Hoption.Logy) chopth[6] = '1';
       if (fH->GetFillColor() && htype) {
-         if (Hoption.Logy) {
-            chopth[6] = '1';
-         }
          if (Hoption.Hist > 0 || Hoption.Curve || Hoption.Line) {
             chopth[7] = 'F';
          }
@@ -7079,7 +7078,23 @@ Int_t THistPainter::PaintInit()
       }
       if (Hparam.xlowedge <=0 ) {
          if (Hoption.Same) {
-            Hparam.xlowedge = TMath::Power(10, gPad->GetUxmin());
+            TH1* h1 = nullptr;
+            TObject *obj;
+            TIter next(gPad->GetListOfPrimitives());
+            while ((obj = (TObject *)next())) {
+               if (obj->InheritsFrom(TH1::Class()))         { h1 = (TH1*)(obj)                          ; break; }
+               if (obj->InheritsFrom(THStack::Class()))     { h1 = ((THStack*)(obj))->GetHistogram()    ; break; }
+               if (obj->InheritsFrom(TGraph::Class()))      { h1 = ((TGraph*)(obj))->GetHistogram()     ; break; }
+               if (obj->InheritsFrom(TMultiGraph::Class())) { h1 = ((TMultiGraph*)(obj))->GetHistogram(); break; }
+               if (obj->InheritsFrom(TGraph2D::Class()))    { h1 = ((TGraph2D*)(obj))->GetHistogram(); break; }
+               if (obj->InheritsFrom(TF1::Class()))         { h1 = ((TF1*)(obj))->GetHistogram(); break; }
+            }
+            if (h1) {
+               Hparam.xlowedge = h1->GetXaxis()->GetBinLowEdge(h1->GetXaxis()->GetFirst());
+            } else {
+               Error(where, "undefined user's coordinates. Cannot use option SAME");
+               return 0;
+            }
          } else {
             for (i=first; i<=last; i++) {
                Double_t binLow = fXaxis->GetBinLowEdge(i);
