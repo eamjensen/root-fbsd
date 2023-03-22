@@ -1585,6 +1585,11 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
    // to disable spell checking.
    fInterpreter->getCI()->getLangOpts().SpellChecking = false;
 
+   // Sync modules on/off between clang and us: clang turns it on for C++ >= 20.
+   auto isModulesArg = [](const char* arg) { return !strcmp(arg, "-fmodules"); };
+   bool hasModulesArg = std::find_if(interpArgs.begin(), interpArgs.end(), isModulesArg) != interpArgs.end();
+   fInterpreter->getCI()->getLangOpts().Modules = hasModulesArg;
+
    // We need stream that doesn't close its file descriptor, thus we are not
    // using llvm::outs. Keeping file descriptor open we will be able to use
    // the results in pipes (Savannah #99234).
@@ -7153,18 +7158,12 @@ static std::string GetSharedLibImmediateDepsSlow(std::string lib,
             continue;
       }
 
-// FIXME: this might really depend on MachO library format instead of R__MACOSX.
-#ifdef R__MACOSX
-      // MacOS symbols sometimes have an extra "_", see
-      // https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man3/dlsym.3.html
-      if (skipLoadedLibs && SymName[0] == '_'
-            && llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(SymName.drop_front().str()))
-         continue;
-#endif
-
       // If we can find the address of the symbol, we have loaded it. Skip.
-      if (skipLoadedLibs && llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(SymName.str()))
-         continue;
+      if (skipLoadedLibs) {
+         std::string SymNameForDlsym = ROOT::TMetaUtils::DemangleNameForDlsym(SymName.str());
+         if (llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(SymNameForDlsym))
+            continue;
+      }
 
       R__LOCKGUARD(gInterpreterMutex);
       std::string found = interp->getDynamicLibraryManager()->searchLibrariesForSymbol(SymName, /*searchSystem*/false);
