@@ -936,7 +936,8 @@ double RooAbsPdf::extendedTerm(RooAbsData const& data, bool weightSquared, bool 
 /// <tr><td> `GlobalObservablesTag(const char* tagName)` <td> Define the set of normalization observables to be used for the constraint terms by
 ///                                                         a string attribute associated with pdf observables that match the given tagName.
 /// <tr><td> `Verbose(bool flag)`           <td> Controls RooFit informational messages in likelihood construction
-/// <tr><td> `CloneData(bool flag)`            <td> Use clone of dataset in NLL (default is true)
+/// <tr><td> `CloneData(bool flag)`            <td> Use clone of dataset in NLL (default is true).
+///                                                 \warning Deprecated option that is ignored. It is up to the implementation of the NLL creation method if the data is cloned or not.
 /// <tr><td> `Offset(std::string const& mode)` <td> Likelihood offsetting mode. Can be either:
 ///                                                 - `"none"` (default): no offsetting
 ///                                                 - `"initial"`: Offset likelihood by initial value (so that starting value of FCN in minuit is zero).
@@ -963,7 +964,7 @@ double RooAbsPdf::extendedTerm(RooAbsData const& data, bool weightSquared, bool 
 ///
 ///
 
-RooAbsReal* RooAbsPdf::createNLL(RooAbsData& data, const RooLinkedList& cmdList)
+RooFit::OwningPtr<RooAbsReal> RooAbsPdf::createNLL(RooAbsData& data, const RooLinkedList& cmdList)
 {
   auto baseName = std::string("nll_") + GetName() + "_" + data.GetName();
 
@@ -1033,8 +1034,8 @@ RooAbsReal* RooAbsPdf::createNLL(RooAbsData& data, const RooLinkedList& cmdList)
       RooFit::TestStatistics::ExternalConstraints extCons(extConsSet);
       RooFit::TestStatistics::GlobalObservables glObs(glObsSet);
 
-      return new RooFit::TestStatistics::RooRealL("likelihood", "",
-          RooFit::TestStatistics::buildLikelihood(this, &data, ext, cPars, extCons, glObs, rangeName));
+      return RooFit::OwningPtr<RooAbsReal>{new RooFit::TestStatistics::RooRealL("likelihood", "",
+          RooFit::TestStatistics::buildLikelihood(this, &data, ext, cPars, extCons, glObs, rangeName))};
   }
 
   // Decode command line arguments
@@ -1157,16 +1158,17 @@ RooAbsReal* RooAbsPdf::createNLL(RooAbsData& data, const RooLinkedList& cmdList)
        compiledConstr->addOwnedComponents(std::move(constr));
     }
 
-    return RooFit::BatchModeHelpers::createNLL(std::move(pdfClone),
-                                               data,
-                                               std::move(compiledConstr),
-                                               rangeName ? rangeName : "",
-                                               projDeps,
-                                               ext,
-                                               pc.getDouble("IntegrateBins"),
-                                               batchMode,
-                                               offset,
-                                               takeGlobalObservablesFromData).release();
+    return RooFit::OwningPtr<RooAbsReal>{RooFit::BatchModeHelpers::createNLL(
+            std::move(pdfClone),
+            data,
+            std::move(compiledConstr),
+            rangeName ? rangeName : "",
+            projDeps,
+            ext,
+            pc.getDouble("IntegrateBins"),
+            batchMode,
+            offset,
+            takeGlobalObservablesFromData).release()};
   }
 
   // Construct NLL
@@ -1221,7 +1223,7 @@ RooAbsReal* RooAbsPdf::createNLL(RooAbsData& data, const RooLinkedList& cmdList)
     nll->enableOffsetting(true) ;
   }
 
-  return nll.release() ;
+  return RooFit::OwningPtr<RooAbsReal>{nll.release()};
 }
 
 
@@ -1608,7 +1610,7 @@ std::unique_ptr<RooFitResult> RooAbsPdf::minimizeNLL(RooAbsReal & nll,
 /// </table>
 ///
 
-RooFitResult* RooAbsPdf::fitTo(RooAbsData& data, const RooLinkedList& cmdList)
+RooFit::OwningPtr<RooFitResult> RooAbsPdf::fitTo(RooAbsData& data, const RooLinkedList& cmdList)
 {
   // Select the pdf-specific commands
   RooCmdConfig pc(Form("RooAbsPdf::fitTo(%s)",GetName())) ;
@@ -1695,13 +1697,9 @@ RooFitResult* RooAbsPdf::fitTo(RooAbsData& data, const RooLinkedList& cmdList)
     }
     else {
       size_t step = data.numEntries()/nEvents;
-      RooArgSet tinyVars(*data.get());
-      RooRealVar weight("weight","weight",1);
 
-      if (data.isWeighted()) tinyVars.add(weight);
-
-      RooDataSet tiny("tiny", "tiny", tinyVars,
-          data.isWeighted() ? RooFit::WeightVar(weight) : RooCmdArg());
+      RooDataSet tiny("tiny", "tiny", *data.get(),
+          data.isWeighted() ? RooFit::WeightVar() : RooCmdArg());
 
       for (int i=0; i<data.numEntries(); i+=step)
       {
@@ -1754,7 +1752,7 @@ RooFitResult* RooAbsPdf::fitTo(RooAbsData& data, const RooLinkedList& cmdList)
   cfg.enableParallelGradient = pc.getInt("enableParallelGradient");
   cfg.enableParallelDescent = pc.getInt("enableParallelDescent");
   cfg.timingAnalysis = pc.getInt("timingAnalysis");
-  return minimizeNLL(*nll, data, cfg).release();
+  return RooFit::OwningPtr<RooFitResult>{minimizeNLL(*nll, data, cfg).release()};
 }
 
 
@@ -1899,9 +1897,9 @@ void RooAbsPdf::printValue(ostream& os) const
   getVal() ;
 
   if (_norm) {
-    os << evaluate() << "/" << _norm->getVal() ;
+    os << getVal() << "/" << _norm->getVal() ;
   } else {
-    os << evaluate() ;
+    os << getVal();
   }
 }
 
@@ -3085,7 +3083,7 @@ RooPlot* RooAbsPdf::plotOn(RooPlot *frame, PlotOpt o) const
 /// <tr><td> `Format(const char* what,...)`       <td>  Parameter formatting options.
 ///   | Parameter              | Format
 ///   | ---------------------- | --------------------------
-///   | `const char* what`     |  Controls what is shown. "N" adds name, "E" adds error, "A" shows asymmetric error, "U" shows unit, "H" hides the value
+///   | `const char* what`     |  Controls what is shown. "N" adds name (alternatively, "T" adds the title), "E" adds error, "A" shows asymmetric error, "U" shows unit, "H" hides the value
 ///   | `FixedPrecision(int n)`|  Controls precision, set fixed number of digits
 ///   | `AutoPrecision(int n)` |  Controls precision. Number of shown digits is calculated from error + n specified additional digits (1 is sensible default)
 /// <tr><td> `Label(const chat* label)`           <td>  Add label to parameter box. Use `\n` for multi-line labels.
@@ -3337,7 +3335,7 @@ RooAbsPdf* RooAbsPdf::createProjection(const RooArgSet& iset)
 /// over z results in a maximum value of 1. To construct such a cdf pass
 /// z as argument to the optional nset argument
 
-RooAbsReal* RooAbsPdf::createCdf(const RooArgSet& iset, const RooArgSet& nset)
+RooFit::OwningPtr<RooAbsReal> RooAbsPdf::createCdf(const RooArgSet& iset, const RooArgSet& nset)
 {
   return createCdf(iset,RooFit::SupNormSet(nset)) ;
 }
@@ -3359,7 +3357,7 @@ RooAbsReal* RooAbsPdf::createCdf(const RooArgSet& iset, const RooArgSet& nset)
 /// | ScanNoCdf()                          | Never apply scanning technique
 /// | ScanParameters(Int_t nbins, Int_t intOrder) | Parameters for scanning technique of making CDF: number of sampled bins and order of interpolation applied on numeric cdf
 
-RooAbsReal* RooAbsPdf::createCdf(const RooArgSet& iset, const RooCmdArg& arg1, const RooCmdArg& arg2,
+RooFit::OwningPtr<RooAbsReal> RooAbsPdf::createCdf(const RooArgSet& iset, const RooCmdArg& arg1, const RooCmdArg& arg2,
              const RooCmdArg& arg3, const RooCmdArg& arg4, const RooCmdArg& arg5,
              const RooCmdArg& arg6, const RooCmdArg& arg7, const RooCmdArg& arg8)
 {
@@ -3414,14 +3412,14 @@ RooAbsReal* RooAbsPdf::createCdf(const RooArgSet& iset, const RooCmdArg& arg1, c
   return 0 ;
 }
 
-RooAbsReal* RooAbsPdf::createScanCdf(const RooArgSet& iset, const RooArgSet& nset, Int_t numScanBins, Int_t intOrder)
+RooFit::OwningPtr<RooAbsReal> RooAbsPdf::createScanCdf(const RooArgSet& iset, const RooArgSet& nset, Int_t numScanBins, Int_t intOrder)
 {
   string name = string(GetName()) + "_NUMCDF_" + integralNameSuffix(iset,&nset).Data() ;
   RooRealVar* ivar = (RooRealVar*) iset.first() ;
   ivar->setBins(numScanBins,"numcdf") ;
-  RooNumCdf* ret = new RooNumCdf(name.c_str(),name.c_str(),*this,*ivar,"numcdf") ;
+  auto ret = std::make_unique<RooNumCdf>(name.c_str(),name.c_str(),*this,*ivar,"numcdf");
   ret->setInterpolationOrder(intOrder) ;
-  return ret ;
+  return RooFit::OwningPtr<RooAbsReal>{ret.release()};
 }
 
 

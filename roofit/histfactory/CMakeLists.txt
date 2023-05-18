@@ -22,6 +22,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(HistFactory
     RooStats/HistFactory/Asimov.h
     RooStats/HistFactory/Channel.h
     RooStats/HistFactory/Data.h
+    RooStats/HistFactory/Detail/HistFactoryImpl.h
     RooStats/HistFactory/FlexibleInterpVar.h
     RooStats/HistFactory/HistFactoryException.h
     RooStats/HistFactory/HistFactoryModelUtils.h
@@ -43,6 +44,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(HistFactory
     src/Channel.cxx
     src/Data.cxx
     src/FlexibleInterpVar.cxx
+    src/HistFactoryImpl.cxx
     src/HistFactoryModelUtils.cxx
     src/HistFactoryNavigation.cxx
     src/HistoToWorkspaceFactoryFast.cxx
@@ -94,8 +96,13 @@ if(xml)
   )
 endif()
 
-file(COPY config/prepareHistFactory DESTINATION  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prepareHistFactory
+if(MSVC)
+  set(prepareHistFactory_script prepareHistFactory.bat)
+else()
+  set(prepareHistFactory_script prepareHistFactory)
+endif()
+file(COPY config/${prepareHistFactory_script} DESTINATION  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+install(FILES ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${prepareHistFactory_script}
                 PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ
                             GROUP_EXECUTE GROUP_READ
                             WORLD_EXECUTE WORLD_READ

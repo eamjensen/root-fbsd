@@ -62,6 +62,7 @@
 
 #include "RooAbsAnaConvPdf.h"
 
+#include "RooNormalizedPdf.h"
 #include "RooMsgService.h"
 #include "Riostream.h"
 #include "RooResolutionModel.h"
@@ -313,8 +314,8 @@ bool RooAbsAnaConvPdf::isDirectGenSafe(const RooAbsArg& arg) const
 
 RooAbsRealLValue* RooAbsAnaConvPdf::convVar()
 {
-  RooResolutionModel* conv = (RooResolutionModel*) _convSet.at(0) ;
-  if (!conv) return 0 ;
+  auto* conv = static_cast<RooResolutionModel*>(_convSet.at(0));
+  if (!conv) return nullptr;
   return &conv->convVar() ;
 }
 
@@ -335,13 +336,12 @@ double RooAbsAnaConvPdf::evaluate() const
     auto conv = static_cast<RooAbsPdf*>(convArg);
     double coef = coefficient(index++) ;
     if (coef!=0.) {
-      double c = conv->getVal(nullptr);
-      double r = coef ;
+      const double c = conv->getVal(nullptr);
       cxcoutD(Eval) << "RooAbsAnaConvPdf::evaluate(" << GetName() << ") val += coef*conv [" << index-1 << "/"
-          << _convSet.getSize() << "] coef = " << r << " conv = " << c << endl ;
-      result += conv->getVal(nullptr)*coef ;
+          << _convSet.size() << "] coef = " << coef << " conv = " << c << endl ;
+      result += c * coef;
     } else {
-      cxcoutD(Eval) << "RooAbsAnaConvPdf::evaluate(" << GetName() << ") [" << index-1 << "/" << _convSet.getSize() << "] coef = 0" << endl ;
+      cxcoutD(Eval) << "RooAbsAnaConvPdf::evaluate(" << GetName() << ") [" << index-1 << "/" << _convSet.size() << "] coef = 0" << endl ;
     }
   }
 
@@ -488,7 +488,7 @@ double RooAbsAnaConvPdf::analyticalIntegralWN(Int_t code, const RooArgSet* normS
     double integral(0) ;
     const TNamed *_rangeName = RooNameReg::ptr(rangeName);
     for (auto convArg : _convSet) {
-      auto conv = static_cast<RooResolutionModel*>(convArg);
+      auto conv = static_cast<RooAbsPdf*>(convArg);
       double coef = getCoefNorm(index++,intCoefSet,_rangeName) ;
       //cout << "coefInt[" << index << "] = " << coef << " " ; intCoefSet->Print("1") ;
       if (coef!=0) {
@@ -506,7 +506,7 @@ double RooAbsAnaConvPdf::analyticalIntegralWN(Int_t code, const RooArgSet* normS
     double norm(0) ;
     const TNamed *_rangeName = RooNameReg::ptr(rangeName);
     for (auto convArg : _convSet) {
-      auto conv = static_cast<RooResolutionModel*>(convArg);
+      auto conv = static_cast<RooAbsPdf*>(convArg);
 
       double coefInt = getCoefNorm(index,intCoefSet,_rangeName) ;
       //cout << "coefInt[" << index << "] = " << coefInt << "*" << term << " " << (intCoefSet?*intCoefSet:RooArgSet()) << endl ;
@@ -614,10 +614,8 @@ void RooAbsAnaConvPdf::makeCoefVarList(RooArgList& varList) const
 {
   // Instantate a coefficient variables
   for (Int_t i=0 ; i<_convSet.getSize() ; i++) {
-    RooArgSet* cvars = coefVars(i) ;
-    RooAbsReal* coefVar = new RooConvCoefVar(Form("%s_coefVar_%d",GetName(),i),"coefVar",*this,i,cvars) ;
-    varList.addOwned(*coefVar) ;
-    delete cvars ;
+    auto cvars = coefVars(i);
+    varList.addOwned(std::make_unique<RooConvCoefVar>(Form("%s_coefVar_%d",GetName(),i),"coefVar",*this,i,&*cvars));
   }
 
 }
@@ -626,9 +624,9 @@ void RooAbsAnaConvPdf::makeCoefVarList(RooArgList& varList) const
 ////////////////////////////////////////////////////////////////////////////////
 /// Return set of parameters with are used exclusively by the coefficient functions
 
-RooArgSet* RooAbsAnaConvPdf::coefVars(Int_t /*coefIdx*/) const
+RooFit::OwningPtr<RooArgSet> RooAbsAnaConvPdf::coefVars(Int_t /*coefIdx*/) const
 {
-  RooArgSet* cVars = getParameters((RooArgSet*)0) ;
+  auto cVars = getParameters(static_cast<RooArgSet*>(nullptr));
   std::vector<RooAbsArg*> tmp;
   for (auto arg : *cVars) {
     for (auto convSetArg : _convSet) {
@@ -640,7 +638,7 @@ RooArgSet* RooAbsAnaConvPdf::coefVars(Int_t /*coefIdx*/) const
 
   cVars->remove(tmp.begin(), tmp.end(), true, true);
 
-  return cVars ;
+  return RooFit::OwningPtr<RooArgSet>{std::move(cVars)};
 }
 
 
@@ -657,7 +655,7 @@ void RooAbsAnaConvPdf::printMultiline(ostream& os, Int_t contents, bool verbose,
   RooAbsPdf::printMultiline(os,contents,verbose,indent);
 
   os << indent << "--- RooAbsAnaConvPdf ---" << endl;
-  for (auto * conv : static_range_cast<RooResolutionModel*>(_convSet)) {
+  for (RooAbsArg * conv : _convSet) {
     conv->printMultiline(os,contents,verbose,indent) ;
   }
 }
@@ -673,4 +671,68 @@ void RooAbsAnaConvPdf::setCacheAndTrackHints(RooArgSet& trackNodes)
       //cout << "tracking node RooAddPdf component " << carg->ClassName() << "::" << carg->GetName() << endl ;
     }
   }
+}
+
+std::unique_ptr<RooAbsArg>
+RooAbsAnaConvPdf::compileForNormSet(RooArgSet const &normSet, RooFit::Detail::CompileContext &ctx) const
+{
+   // If there is only one component in the linear sum of convolutions, we can
+   // just return that one, normalized.
+   if(_convSet.size() == 1) {
+      if (normSet.empty()) {
+         return _convSet[0].compileForNormSet(normSet, ctx);
+      }
+      std::unique_ptr<RooAbsPdf> pdfClone(static_cast<RooAbsPdf *>(_convSet[0].Clone()));
+      ctx.compileServers(*pdfClone, normSet);
+
+      auto newArg = std::make_unique<RooNormalizedPdf>(*pdfClone, normSet);
+
+      // The direct servers are this pdf and the normalization integral, which
+      // don't need to be compiled further.
+      for (RooAbsArg *server : newArg->servers()) {
+         server->setAttribute("_COMPILED");
+      }
+      newArg->setAttribute("_COMPILED");
+      newArg->addOwnedComponents(std::move(pdfClone));
+      return newArg;
+   }
+
+   // Here, we can't use directly the function from the RooAbsPdf base class,
+   // because the convolution argument servers need to be evaluated
+   // unnormalized, even if they are pdfs.
+
+   if (normSet.empty()) {
+      return RooAbsPdf::compileForNormSet(normSet, ctx);
+   }
+   std::unique_ptr<RooAbsAnaConvPdf> pdfClone(static_cast<RooAbsAnaConvPdf *>(this->Clone()));
+
+   // The actual resolution model is not serving the RooAbsAnaConvPdf
+   // in the evaluation. It was only used get the convolutions with a given
+   // basis. We can remove it for the compiled model.
+   pdfClone->removeServer(const_cast<RooAbsReal &>(pdfClone->_model.arg()), true);
+
+   // The other servers will be compiled with the original normSet, but the
+   // _convSet has to be evaluated unnormalized.
+   RooArgList convArgClones;
+   for (RooAbsArg *convArg : _convSet) {
+      if (auto convArgClone = ctx.compile(*convArg, *pdfClone, {})) {
+         convArgClones.add(*convArgClone);
+      }
+   }
+   pdfClone->redirectServers(convArgClones, false, true);
+
+   // Compile remaining servers that are evaluated normalized
+   ctx.compileServers(*pdfClone, normSet);
+
+   // Finally, this RooAbsAnaConvPdf needs to be normalized
+   auto newArg = std::make_unique<RooNormalizedPdf>(*pdfClone, normSet);
+
+   // The direct servers are this pdf and the normalization integral, which
+   // don't need to be compiled further.
+   for (RooAbsArg *server : newArg->servers()) {
+      server->setAttribute("_COMPILED");
+   }
+   newArg->setAttribute("_COMPILED");
+   newArg->addOwnedComponents(std::move(pdfClone));
+   return newArg;
 }

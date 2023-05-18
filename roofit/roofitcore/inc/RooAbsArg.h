@@ -24,6 +24,7 @@
 #include "RooAbsCache.h"
 #include "RooNameReg.h"
 #include "RooLinkedListIter.h"
+#include <RooFit/Config.h>
 #include <RooFit/Detail/NormalizationHelpers.h>
 #include <RooStringView.h>
 
@@ -111,7 +112,13 @@ public:
     return dependsOn(server,ignoreArg,true) ;
   }
   bool dependsOn(const RooAbsCollection& serverList, const RooAbsArg* ignoreArg=nullptr, bool valueOnly=false) const ;
-  bool dependsOn(const RooAbsArg& server, const RooAbsArg* ignoreArg=nullptr, bool valueOnly=false) const ;
+  /// Test whether we depend on (ie, are served by) the specified object.
+  /// Note that RooAbsArg objects are considered equivalent if they have
+  /// the same name.
+  inline bool dependsOn(const RooAbsArg& server, const RooAbsArg* ignoreArg=nullptr, bool valueOnly=false) const {
+    return dependsOn(server.namePtr(), ignoreArg, valueOnly);
+  }
+  bool dependsOn(TNamed const* namePtr, const RooAbsArg* ignoreArg=nullptr, bool valueOnly=false) const ;
   bool overlaps(const RooAbsArg& testArg, bool valueOnly=false) const ;
   bool hasClients() const { return !_clientList.empty(); }
 
@@ -280,17 +287,11 @@ public:
 
 
   // Parameter & observable interpretation of servers
-  RooArgSet* getVariables(bool stripDisconnected=true) const ;
-  RooArgSet* getParameters(const RooAbsData* data, bool stripDisconnected=true) const ;
-  /// Return the parameters of this p.d.f when used in conjuction with dataset 'data'
-  RooArgSet* getParameters(const RooAbsData& data, bool stripDisconnected=true) const {
-    return getParameters(&data,stripDisconnected) ;
-  }
-  /// Return the parameters of the p.d.f given the provided set of observables
-  RooArgSet* getParameters(const RooArgSet& observables, bool stripDisconnected=true) const {
-    return getParameters(&observables,stripDisconnected);
-  }
-  RooArgSet* getParameters(const RooArgSet* observables, bool stripDisconnected=true) const;
+  RooFit::OwningPtr<RooArgSet> getVariables(bool stripDisconnected=true) const ;
+  RooFit::OwningPtr<RooArgSet> getParameters(const RooAbsData* data, bool stripDisconnected=true) const;
+  RooFit::OwningPtr<RooArgSet> getParameters(const RooAbsData& data, bool stripDisconnected=true) const;
+  RooFit::OwningPtr<RooArgSet> getParameters(const RooArgSet& observables, bool stripDisconnected=true) const;
+  RooFit::OwningPtr<RooArgSet> getParameters(const RooArgSet* observables, bool stripDisconnected=true) const;
   virtual bool getParameters(const RooArgSet* observables, RooArgSet& outputSet, bool stripDisconnected=true) const;
   /// Given a set of possible observables, return the observables that this PDF depends on.
   RooArgSet* getObservables(const RooArgSet& set, bool valueOnly=true) const {

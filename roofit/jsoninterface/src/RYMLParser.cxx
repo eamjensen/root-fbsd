@@ -109,16 +109,23 @@ void TRYMLTree::Node::writeYML(std::ostream &os) const
    os << node->get();
 }
 
-void TRYMLTree::Node::set_map()
+TRYMLTree::Node &TRYMLTree::Node::set_map()
 {
    // assign this node to be a map (JSON object)
    node->get() |= c4::yml::MAP;
+   return *this;
 }
 
-void TRYMLTree::Node::set_seq()
+TRYMLTree::Node &TRYMLTree::Node::set_seq()
 {
    // assign this node to be a sequence (JSON array)
    node->get() |= c4::yml::SEQ;
+   return *this;
+}
+
+void TRYMLTree::Node::clear()
+{
+   throw std::logic_error("Function not yet implemented");
 }
 
 TRYMLTree::TRYMLTree(std::istream &is)
@@ -171,7 +178,7 @@ TRYMLTree::Node &TRYMLTree::Node::operator<<(int i)
 
 TRYMLTree::Node &TRYMLTree::Node::operator<<(double d)
 {
-   // write an float to this node
+   // write a double to this node
    node->get() << d;
    return *this;
 }

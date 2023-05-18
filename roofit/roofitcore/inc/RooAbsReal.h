@@ -135,7 +135,7 @@ public:
 #endif
   /// \copydoc getValBatch(std::size_t, std::size_t, const RooArgSet*)
   virtual RooSpan<const double> getValues(RooBatchCompute::RunContext& evalData, const RooArgSet* normSet = nullptr) const;
-  std::vector<double> getValues(RooAbsData const& data, RooFit::BatchModeOption batchMode=RooFit::BatchModeOption::Cpu) const;
+  std::vector<double> getValues(RooAbsData const& data) const;
 
   double getPropagatedError(const RooFitResult &fr, const RooArgSet &nset = RooArgSet()) const;
 
@@ -231,13 +231,13 @@ public:
   void setParameterizeIntegral(const RooArgSet& paramVars) ;
 
   // Create running integrals
-  RooAbsReal* createRunningIntegral(const RooArgSet& iset, const RooArgSet& nset=RooArgSet()) ;
-  RooAbsReal* createRunningIntegral(const RooArgSet& iset, const RooCmdArg& arg1, const RooCmdArg& arg2=RooCmdArg::none(),
+  RooFit::OwningPtr<RooAbsReal> createRunningIntegral(const RooArgSet& iset, const RooArgSet& nset=RooArgSet()) ;
+  RooFit::OwningPtr<RooAbsReal> createRunningIntegral(const RooArgSet& iset, const RooCmdArg& arg1, const RooCmdArg& arg2=RooCmdArg::none(),
          const RooCmdArg& arg3=RooCmdArg::none(), const RooCmdArg& arg4=RooCmdArg::none(),
          const RooCmdArg& arg5=RooCmdArg::none(), const RooCmdArg& arg6=RooCmdArg::none(),
          const RooCmdArg& arg7=RooCmdArg::none(), const RooCmdArg& arg8=RooCmdArg::none()) ;
-  RooAbsReal* createIntRI(const RooArgSet& iset, const RooArgSet& nset=RooArgSet()) ;
-  RooAbsReal* createScanRI(const RooArgSet& iset, const RooArgSet& nset, Int_t numScanBins, Int_t intOrder) ;
+  RooFit::OwningPtr<RooAbsReal> createIntRI(const RooArgSet& iset, const RooArgSet& nset=RooArgSet()) ;
+  RooFit::OwningPtr<RooAbsReal> createScanRI(const RooArgSet& iset, const RooArgSet& nset, Int_t numScanBins, Int_t intOrder) ;
 
 
   // Optimized accept/reject generator support
@@ -290,7 +290,7 @@ public:
            const RooArgSet* condObs=nullptr, bool setError=true) const;
 
   // Create 1,2, and 3D histograms from and fill it
-  TH1 *createHistogram(const char* varNameList, Int_t xbins=0, Int_t ybins=0, Int_t zbins=0) const ;
+  TH1 *createHistogram(RooStringView varNameList, Int_t xbins=0, Int_t ybins=0, Int_t zbins=0) const ;
   TH1* createHistogram(const char *name, const RooAbsRealLValue& xvar, RooLinkedList& argList) const ;
   TH1 *createHistogram(const char *name, const RooAbsRealLValue& xvar,
                        const RooCmdArg& arg1=RooCmdArg::none(), const RooCmdArg& arg2=RooCmdArg::none(),
@@ -324,6 +324,22 @@ public:
   } ;
 
   enum ErrorLoggingMode { PrintErrors, CollectErrors, CountErrors, Ignore } ;
+
+  /// Context to temporarily change the error logging mode as long as the context is alive.
+  class EvalErrorContext {
+  public:
+     EvalErrorContext(ErrorLoggingMode m) : _old{evalErrorLoggingMode()} { setEvalErrorLoggingMode(m); }
+
+     EvalErrorContext(EvalErrorContext const&) = delete;
+     EvalErrorContext(EvalErrorContext &&) = delete;
+     EvalErrorContext& operator=(EvalErrorContext const&) = delete;
+     EvalErrorContext& operator=(EvalErrorContext &&) = delete;
+
+     ~EvalErrorContext() { setEvalErrorLoggingMode(_old); }
+  private:
+     ErrorLoggingMode _old;
+  };
+
   static ErrorLoggingMode evalErrorLoggingMode() ;
   static void setEvalErrorLoggingMode(ErrorLoggingMode m) ;
   void logEvalError(const char* message, const char* serverValueString=nullptr) const ;

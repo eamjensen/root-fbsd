@@ -44,8 +44,8 @@ ToyMCImportanceSampler::~ToyMCImportanceSampler() {
 void ToyMCImportanceSampler::ClearCache(void) {
    ToyMCSampler::ClearCache();
 
-   for( unsigned int i=0; i < fImpNLLs.size(); i++ ) if(fImpNLLs[i]) { delete fImpNLLs[i]; fImpNLLs[i] = nullptr; }
-   for( unsigned int i=0; i < fNullNLLs.size(); i++ ) if(fNullNLLs[i]) { delete fNullNLLs[i]; fNullNLLs[i] = nullptr; }
+   for( unsigned int i=0; i < fImpNLLs.size(); i++ ) { fImpNLLs[i].reset(); }
+   for( unsigned int i=0; i < fNullNLLs.size(); i++ ) { fNullNLLs[i].reset(); }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -104,13 +104,7 @@ RooDataSet* ToyMCImportanceSampler::GetSamplingDistributionsSingleWorker(RooArgS
       }
 
       if( !fullResult ) {
-         RooArgSet columns( *result->get() );
-         RooRealVar weightVar ( "weight", "weight", 1.0 );
-         columns.add( weightVar );
-//       cout << endl << endl << "Reweighted data columns: " << endl;
-//       columns.Print("v");
-//       cout << endl;
-         fullResult = new RooDataSet( result->GetName(), result->GetTitle(), columns, "weight" );
+         fullResult = new RooDataSet( result->GetName(), result->GetTitle(), *result->get(), RooFit::WeightVar());
       }
 
       for( int j=0; j < result->numEntries(); j++ ) {
@@ -287,7 +281,7 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
 
 
    // assign input paramPoint
-   RooArgSet* allVars = fPdf->getVariables();
+   std::unique_ptr<RooArgSet> allVars{fPdf->getVariables()};
    allVars->assign(paramPoint);
 
 
@@ -306,9 +300,8 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
    // save values to restore later.
    // but this must remain after(!) generating global observables
    if( !fGenerateFromNull ) {
-      RooArgSet* allVarsImpDens = fImportanceDensities[fIndexGenDensity]->getVariables();
+      std::unique_ptr<RooArgSet> allVarsImpDens{fImportanceDensities[fIndexGenDensity]->getVariables()};
       allVars->add(*allVarsImpDens);
-      delete allVarsImpDens;
    }
    const RooArgSet* saveVars = (const RooArgSet*)allVars->snapshot();
 
@@ -364,16 +357,15 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
 
       allVars->assign(*fNullSnapshots[i]);
       if( !fNullNLLs[i] ) {
-         RooArgSet* allParams = fNullDensities[i]->getParameters(*data);
-         fNullNLLs[i] = fNullDensities[i]->createNLL(*data, RooFit::CloneData(false), RooFit::Constrain(*allParams),
-                                                     RooFit::ConditionalObservables(fConditionalObs));
-         delete allParams;
+         std::unique_ptr<RooArgSet> allParams{fNullDensities[i]->getParameters(*data)};
+         fNullNLLs[i] = std::unique_ptr<RooAbsReal>{fNullDensities[i]->createNLL(*data, RooFit::CloneData(false), RooFit::Constrain(*allParams),
+                                                     RooFit::ConditionalObservables(fConditionalObs))};
       }else{
          fNullNLLs[i]->setData( *data, false );
       }
       nullNLLVals[i] = fNullNLLs[i]->getVal();
       // FOR DEBuGGING!!!!!!!!!!!!!!!!!
-      if( !fReuseNLL ) { delete fNullNLLs[i]; fNullNLLs[i] = nullptr; }
+      if( !fReuseNLL ) { fNullNLLs[i].reset(); }
    }
 
 
@@ -390,16 +382,15 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
         allVars->assign(*fImportanceSnapshots[i]);
       }
       if( !fImpNLLs[i] ) {
-         RooArgSet* allParams = fImportanceDensities[i]->getParameters(*data);
-         fImpNLLs[i] = fImportanceDensities[i]->createNLL(*data, RooFit::CloneData(false), RooFit::Constrain(*allParams),
-                                                          RooFit::ConditionalObservables(fConditionalObs));
-         delete allParams;
+         std::unique_ptr<RooArgSet> allParams{fImportanceDensities[i]->getParameters(*data)};
+         fImpNLLs[i] = std::unique_ptr<RooAbsReal>{fImportanceDensities[i]->createNLL(*data, RooFit::CloneData(false), RooFit::Constrain(*allParams),
+                                                          RooFit::ConditionalObservables(fConditionalObs))};
       }else{
          fImpNLLs[i]->setData( *data, false );
       }
       impNLLVals[i] = fImpNLLs[i]->getVal();
       // FOR DEBuGGING!!!!!!!!!!!!!!!!!
-      if( !fReuseNLL ) { delete fImpNLLs[i]; fImpNLLs[i] = nullptr; }
+      if( !fReuseNLL ) { fImpNLLs[i].reset(); }
 
       for( unsigned int j=0; j < nullNLLVals.size(); j++ ) {
          if( impNLLVals[i] < minNLLVals[j] ) minNLLVals[j] = impNLLVals[i];
@@ -426,7 +417,6 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
 
 
    allVars->assign(*saveVars);
-   delete allVars;
    delete saveVars;
 
    return data;

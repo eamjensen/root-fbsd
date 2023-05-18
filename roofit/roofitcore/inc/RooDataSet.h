@@ -16,10 +16,12 @@
 #ifndef ROO_DATA_SET
 #define ROO_DATA_SET
 
-class TDirectory;
 class RooAbsRealLValue;
-class RooRealVar;
+class RooCategory;
 class RooDataHist;
+class RooRealVar;
+
+class TDirectory;
 
 #include "RooAbsData.h"
 #include "RooDirItem.h"
@@ -64,11 +66,11 @@ public:
   // Constructors, factory methods etc.
   RooDataSet() ;
 
-  // Empty constructor
-  RooDataSet(RooStringView name, RooStringView title, const RooArgSet& vars, const char* wgtVarName=nullptr) ;
+  RooDataSet(RooStringView name, RooStringView title, const RooArgSet& vars, const char* wgtVarName)
+     R__SUGGEST_ALTERNATIVE("Use RooDataSet(name, title, vars, RooFit::WeightVar(wgtVarName)).");
 
   // Universal constructor
-  RooDataSet(RooStringView name, RooStringView title, const RooArgSet& vars, const RooCmdArg& arg1, const RooCmdArg& arg2=RooCmdArg(),
+  RooDataSet(RooStringView name, RooStringView title, const RooArgSet& vars, const RooCmdArg& arg1=RooCmdArg(), const RooCmdArg& arg2=RooCmdArg(),
              const RooCmdArg& arg3=RooCmdArg(), const RooCmdArg& arg4=RooCmdArg(),const RooCmdArg& arg5=RooCmdArg(),
              const RooCmdArg& arg6=RooCmdArg(),const RooCmdArg& arg7=RooCmdArg(),const RooCmdArg& arg8=RooCmdArg()) ;
 
@@ -167,12 +169,14 @@ protected:
              const RooArgSet& vars, const RooFormulaVar* cutVar, const char* cutRange,
              std::size_t nStart, std::size_t nStop);
 
-  RooArgSet addWgtVar(const RooArgSet& origVars, const RooAbsArg* wgtVar) ;
-
-  RooArgSet _varsNoWgt ;   ///< Vars without weight variable
-  RooRealVar* _wgtVar ;    ///< Pointer to weight variable (if set)
+  RooArgSet _varsNoWgt;          ///< Vars without weight variable
+  RooRealVar *_wgtVar = nullptr; ///< Pointer to weight variable (if set)
 
 private:
+
+  void loadValuesFromSlices(RooCategory &indexCat, std::map<std::string, RooAbsData *> const &slices,
+                            const char *rangeName, RooFormulaVar const *cutVar, const char *cutSpec);
+
 #ifdef USEMEMPOOLFORDATASET
   typedef MemPoolForRooSets<RooDataSet, 5*150> MemPool; ///< 150 = about 100kb
   static MemPool * memPool();

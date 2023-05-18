@@ -51,17 +51,6 @@ std::unique_ptr<RooDataHist> generateBinnedAsimov(RooAbsPdf const &pdf, RooRealV
    return dataH;
 }
 
-std::unique_ptr<RooDataSet> dataHistToDataSet(RooDataHist const &dataH)
-{
-   RooRealVar w("w", "weight", 0., 0., dataH.sumEntries());
-   auto data = std::make_unique<RooDataSet>("data", "data", RooArgSet{*dataH.get(), w}, RooFit::WeightVar(w));
-   for (int i = 0; i < dataH.numEntries(); ++i) {
-      auto coords = dataH.get(i);
-      data->add(*coords, dataH.weight());
-   }
-   return data;
-}
-
 } // namespace
 
 class TestStatisticTest : public testing::TestWithParam<std::tuple<std::string>> {
@@ -98,7 +87,7 @@ TEST_P(TestStatisticTest, IntegrateBins)
    using namespace RooFit;
 
    std::unique_ptr<RooDataHist> dataH(generateBinnedAsimov(pdf, x, 10000));
-   std::unique_ptr<RooDataSet> dataS = dataHistToDataSet(*dataH);
+   auto dataS = std::make_unique<RooDataSet>("data", "data", x, Import(*dataH));
 
    std::unique_ptr<RooPlot> frame(x.frame());
    dataH->plotOn(frame.get(), MarkerColor(kRed));
@@ -147,7 +136,7 @@ TEST_P(TestStatisticTest, IntegrateBins_SubRange)
    using namespace RooFit;
 
    std::unique_ptr<RooDataHist> dataH(generateBinnedAsimov(pdf, x, 10000));
-   std::unique_ptr<RooDataSet> dataS = dataHistToDataSet(*dataH);
+   auto dataS = std::make_unique<RooDataSet>("data", "data", x, Import(*dataH));
 
    std::unique_ptr<RooPlot> frame(x.frame());
    dataH->plotOn(frame.get(), MarkerColor(kRed));
@@ -199,7 +188,7 @@ TEST_P(TestStatisticTest, IntegrateBins_CustomBinning)
    using namespace RooFit;
 
    std::unique_ptr<RooDataHist> dataH(generateBinnedAsimov(pdf, x, 50000));
-   std::unique_ptr<RooDataSet> dataS = dataHistToDataSet(*dataH);
+   auto dataS = std::make_unique<RooDataSet>("data", "data", x, Import(*dataH));
 
    std::unique_ptr<RooPlot> frame(x.frame());
    dataH->plotOn(frame.get(), Name("dataHist"), MarkerColor(kRed));
@@ -336,12 +325,11 @@ TEST(RooNLLVar, CopyRangedNLL)
 
    // This bug is related to the implementation details of the old test statistics, so BatchMode is forced to be off
    using namespace RooFit;
-   std::unique_ptr<RooNLLVar> nll{static_cast<RooNLLVar *>(model.createNLL(*ds, BatchMode("off")))};
-   std::unique_ptr<RooNLLVar> nllrange{
-      static_cast<RooNLLVar *>(model.createNLL(*ds, Range("fitrange"), BatchMode("off")))};
+   std::unique_ptr<RooAbsReal> nll{model.createNLL(*ds, BatchMode("off"))};
+   std::unique_ptr<RooAbsReal> nllrange{model.createNLL(*ds, Range("fitrange"), BatchMode("off"))};
 
-   auto nllClone = std::make_unique<RooNLLVar>(*nll);
-   auto nllrangeClone = std::make_unique<RooNLLVar>(*nllrange);
+   auto nllClone = std::make_unique<RooNLLVar>(static_cast<RooNLLVar &>(*nll));
+   auto nllrangeClone = std::make_unique<RooNLLVar>(static_cast<RooNLLVar &>(*nllrange));
 
    EXPECT_FLOAT_EQ(nll->getVal(), nllClone->getVal());
    EXPECT_FLOAT_EQ(nll->getVal(), nllrange->getVal());
@@ -458,8 +446,7 @@ TEST_P(OffsetBinTest, CrossCheck)
    // it correctly.
    {
       // Create weighted dataset and hist to test SumW2 feature
-      RooRealVar weight("weight", "weight", 0.5, 0.0, 1.0);
-      auto dataW = std::make_unique<RooDataSet>("dataW", "dataW", RooArgSet{x, weight}, "weight");
+      auto dataW = std::make_unique<RooDataSet>("dataW", "dataW", x, RooFit::WeightVar());
       for (int i = 0; i < data->numEntries(); ++i) {
          dataW->add(*data->get(i), 0.5);
       }

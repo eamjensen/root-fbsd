@@ -48,9 +48,6 @@ class RooAbsDataStore ;
 template<typename T> class TMatrixTSym;
 using TMatrixDSym = TMatrixTSym<double>;
 class RooFormulaVar;
-namespace RooBatchCompute{
-struct RunContext;
-}
 namespace RooFit {
 namespace TestStatistics {
 class RooAbsL;
@@ -328,6 +325,8 @@ protected:
   static StorageType defaultStorageType ;
 
   StorageType storageType;
+
+  void initializeVars(RooArgSet const& vars);
 
   double corrcov(const RooRealVar& x, const RooRealVar& y, const char* cutSpec, const char* cutRange, bool corr) const  ;
   TMatrixDSym* corrcovMatrix(const RooArgList& vars, const char* cutSpec, const char* cutRange, bool corr) const  ;

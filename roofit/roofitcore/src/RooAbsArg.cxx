@@ -560,9 +560,38 @@ void RooAbsArg::treeNodeServerList(RooAbsCollection* list, const RooAbsArg* arg,
 /// function is responsible for deleting the returned argset.
 /// The complement of this function is getObservables()
 
-RooArgSet* RooAbsArg::getParameters(const RooAbsData* set, bool stripDisconnected) const
+RooFit::OwningPtr<RooArgSet> RooAbsArg::getParameters(const RooAbsData* set, bool stripDisconnected) const
 {
   return getParameters(set?set->get():0,stripDisconnected) ;
+}
+
+
+/// Return the parameters of this p.d.f when used in conjuction with dataset 'data'.
+RooFit::OwningPtr<RooArgSet> RooAbsArg::getParameters(const RooAbsData& data, bool stripDisconnected) const
+{
+  return getParameters(&data,stripDisconnected) ;
+}
+
+
+/// Return the parameters of the p.d.f given the provided set of observables.
+RooFit::OwningPtr<RooArgSet> RooAbsArg::getParameters(const RooArgSet& observables, bool stripDisconnected) const
+{
+  return getParameters(&observables,stripDisconnected);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// Create a list of leaf nodes in the arg tree starting with
+/// ourself as top node that don't match any of the names the args in the
+/// supplied argset. The caller of this function is responsible
+/// for deleting the returned argset. The complement of this function
+/// is getObservables().
+
+RooFit::OwningPtr<RooArgSet> RooAbsArg::getParameters(const RooArgSet* observables, bool stripDisconnected) const
+{
+  auto * outputSet = new RooArgSet;
+  getParameters(observables, *outputSet, stripDisconnected);
+  return RooFit::OwningPtr<RooArgSet>{outputSet};
 }
 
 
@@ -636,19 +665,6 @@ std::size_t RooAbsArg::getParametersSizeEstimate(const RooArgSet* nset) const
   }
 
   return res;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// Create a list of leaf nodes in the arg tree starting with
-/// ourself as top node that don't match any of the names the args in the
-/// supplied argset. The caller of this function is responsible
-/// for deleting the returned argset. The complement of this function
-/// is getObservables().
-
-RooArgSet* RooAbsArg::getParameters(const RooArgSet* observables, bool stripDisconnected) const {
-  auto * outputSet = new RooArgSet;
-  getParameters(observables, *outputSet, stripDisconnected);
-  return outputSet;
 }
 
 
@@ -839,21 +855,16 @@ bool RooAbsArg::dependsOn(const RooAbsCollection& serverList, const RooAbsArg* i
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Test whether we depend on (ie, are served by) the specified object.
-/// Note that RooAbsArg objects are considered equivalent if they have
-/// the same name.
-
-bool RooAbsArg::dependsOn(const RooAbsArg& testArg, const RooAbsArg* ignoreArg, bool valueOnly) const
+/// Test whether we depend on (ie, are served by) an object with a specific name.
+bool RooAbsArg::dependsOn(TNamed const* testArgNamePtr, const RooAbsArg* ignoreArg, bool valueOnly) const
 {
   if (this==ignoreArg) return false ;
 
   // First check if testArg is self
-  //if (!TString(testArg.GetName()).CompareTo(GetName())) return true ;
-  if (testArg.namePtr()==namePtr()) return true ;
-
+  if (testArgNamePtr == namePtr()) return true ;
 
   // Next test direct dependence
-  RooAbsArg* foundServer = findServer(testArg) ;
+  RooAbsArg *foundServer = _serverList.findByNamePointer(testArgNamePtr);
   if (foundServer) {
 
     // Return true if valueOnly is FALSE or if server is value server, otherwise keep looking
@@ -865,7 +876,7 @@ bool RooAbsArg::dependsOn(const RooAbsArg& testArg, const RooAbsArg* ignoreArg, 
   // If not, recurse
   for (const auto server : _serverList) {
     if ( !valueOnly || server->isValueServer(*this)) {
-      if (server->dependsOn(testArg,ignoreArg,valueOnly)) {
+      if (server->dependsOn(testArgNamePtr,ignoreArg,valueOnly)) {
         return true ;
       }
     }
@@ -1064,9 +1075,12 @@ bool RooAbsArg::redirectServers(const RooAbsCollection& newSetOrig, bool mustRep
 
     if (!newServer) {
       if (mustReplaceAll) {
-        coutE(LinkStateMgmt) << "RooAbsArg::redirectServers(" << (void*)this << "," << GetName() << "): server " << oldServer->GetName()
-                    << " (" << (void*)oldServer << ") not redirected" << (nameChange?"[nameChange]":"") << endl ;
-        ret = true ;
+        std::stringstream ss;
+        ss << "RooAbsArg::redirectServers(" << (void*)this << "," << GetName() << "): server " << oldServer->GetName()
+           << " (" << (void*)oldServer << ") not redirected" << (nameChange?"[nameChange]":"");
+        const std::string errorMsg = ss.str();
+        coutE(LinkStateMgmt) << errorMsg << std::endl;
+        throw std::runtime_error(errorMsg);
       }
       continue ;
     }
@@ -1816,14 +1830,14 @@ bool RooAbsArg::findConstantNodes(const RooArgSet& observables, RooArgSet& cache
 
   // Check if node depends on any non-constant parameter
   bool canOpt(true) ;
-  RooArgSet* paramSet = getParameters(observables) ;
-  for(RooAbsArg * param : *paramSet) {
+  RooArgSet paramSet;
+  getParameters(&observables, paramSet);
+  for(RooAbsArg * param : paramSet) {
     if (!param->isConstant()) {
       canOpt=false ;
       break ;
     }
   }
-  delete paramSet ;
 
 
   if (getAttribute("NeverConstant")) {
@@ -2077,7 +2091,7 @@ RooAbsCache* RooAbsArg::getCache(Int_t index) const
 ////////////////////////////////////////////////////////////////////////////////
 /// Return RooArgSet with all variables (tree leaf nodes of expresssion tree)
 
-RooArgSet* RooAbsArg::getVariables(bool stripDisconnected) const
+RooFit::OwningPtr<RooArgSet> RooAbsArg::getVariables(bool stripDisconnected) const
 {
   return getParameters(RooArgSet(),stripDisconnected) ;
 }
@@ -2458,7 +2472,7 @@ void RooRefArray::Streamer(TBuffer &R__b)
      R__c = R__b.WriteVersion(RooRefArray::IsA(), true);
 
      // Make a temporary refArray and write that to the streamer
-     TRefArray refArray(GetEntriesFast());
+     TRefArray refArray;
      for(TObject * tmpObj : *this) {
        refArray.Add(tmpObj) ;
      }

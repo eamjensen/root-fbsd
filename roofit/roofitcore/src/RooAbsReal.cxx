@@ -301,9 +301,9 @@ RooSpan<const double> RooAbsReal::getValues(RooBatchCompute::RunContext& evalDat
 
 ////////////////////////////////////////////////////////////////////////////////
 
-std::vector<double> RooAbsReal::getValues(RooAbsData const& data, RooFit::BatchModeOption batchMode) const {
+std::vector<double> RooAbsReal::getValues(RooAbsData const& data) const {
   std::unique_ptr<RooAbsReal> clone = RooFit::Detail::compileForNormSet<RooAbsReal>(*this, *data.get());
-  ROOT::Experimental::RooFitDriver driver(*clone, batchMode);
+  ROOT::Experimental::RooFitDriver driver(*clone, RooFit::BatchModeOption::Cpu);
   driver.setData(data, "");
   return driver.getValues();
 }
@@ -1227,20 +1227,30 @@ RooDataHist* RooAbsReal::fillDataHist(RooDataHist *hist, const RooArgSet* normSe
 /// RooAbsReal::createHistogram(const char *, const RooAbsRealLValue&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&) const
 ///
 
-TH1* RooAbsReal::createHistogram(const char* varNameList, Int_t xbins, Int_t ybins, Int_t zbins) const
+TH1* RooAbsReal::createHistogram(RooStringView varNameList, Int_t xbins, Int_t ybins, Int_t zbins) const
 {
-  // Parse std::list of variable names
-  char buf[1024] ;
-  strlcpy(buf,varNameList,1024) ;
-  char* varName = strtok(buf,",:") ;
-
   std::unique_ptr<RooArgSet> vars{getVariables()};
 
-  RooRealVar* xvar = (RooRealVar*) vars->find(varName) ;
-  varName = strtok(0,",") ;
-  RooRealVar* yvar = varName ? (RooRealVar*) vars->find(varName) : 0 ;
-  varName = strtok(0,",") ;
-  RooRealVar* zvar = varName ? (RooRealVar*) vars->find(varName) : 0 ;
+  auto varNames = ROOT::Split(varNameList, ",:");
+  std::vector<RooRealVar*> histVars(3, nullptr);
+
+  for(std::size_t iVar = 0; iVar < varNames.size(); ++iVar) {
+    if(varNames[iVar].empty()) continue;
+    if(iVar >= 3) {
+      std::stringstream errMsg;
+      errMsg << "RooAbsPdf::createHistogram(" << GetName() << ") ERROR more than three variable names passed, but maxumum number of supported variables is three";
+      coutE(Plotting) << errMsg.str() << std::endl;
+      throw std::invalid_argument(errMsg.str());
+    }
+    auto var = static_cast<RooRealVar*>(vars->find(varNames[iVar].c_str()));
+    if(!var) {
+      std::stringstream errMsg;
+      errMsg << "RooAbsPdf::createHistogram(" << GetName() << ") ERROR variable " << varNames[iVar] << " does not exist in argset: " << *vars;
+      coutE(Plotting) << errMsg.str() << std::endl;
+      throw std::runtime_error(errMsg.str());
+    }
+    histVars[iVar] = var;
+  }
 
   // Construct std::list of named arguments to pass to the implementation version of createHistogram()
 
@@ -1249,26 +1259,16 @@ TH1* RooAbsReal::createHistogram(const char* varNameList, Int_t xbins, Int_t ybi
     argList.Add(RooFit::Binning(xbins).Clone()) ;
   }
 
-  if (yvar) {
-    if (ybins>0) {
-      argList.Add(RooFit::YVar(*yvar,RooFit::Binning(ybins)).Clone()) ;
-    } else {
-      argList.Add(RooFit::YVar(*yvar).Clone()) ;
-    }
+  if (histVars[1]) {
+    argList.Add(RooFit::YVar(*histVars[1], ybins > 0 ? RooFit::Binning(ybins) : RooCmdArg::none()).Clone()) ;
   }
 
-
-  if (zvar) {
-    if (zbins>0) {
-      argList.Add(RooFit::ZVar(*zvar,RooFit::Binning(zbins)).Clone()) ;
-    } else {
-      argList.Add(RooFit::ZVar(*zvar).Clone()) ;
-    }
+  if (histVars[2]) {
+    argList.Add(RooFit::ZVar(*histVars[2], zbins > 0 ? RooFit::Binning(zbins) : RooCmdArg::none()).Clone()) ;
   }
-
 
   // Call implementation function
-  TH1* result = createHistogram(GetName(),*xvar,argList) ;
+  TH1* result = createHistogram(GetName(), *histVars[0], argList) ;
 
   // Delete temporary std::list of RooCmdArgs
   argList.Delete() ;
@@ -1370,7 +1370,7 @@ TH1* RooAbsReal::createHistogram(const char *name, const RooAbsRealLValue& xvar,
 
   // If doExtended is two, selection is automatic, set to 1 of pdf is extended, to zero otherwise
   const RooAbsPdf* pdfSelf = dynamic_cast<const RooAbsPdf*>(this) ;
-  if (!pdfSelf && doExtended>0) {
+  if (!pdfSelf && doExtended == 1) {
     coutW(InputArguments) << "RooAbsReal::createHistogram(" << GetName() << ") WARNING extended mode requested for a non-pdf object, ignored" << std::endl ;
     doExtended=0 ;
   }
@@ -1380,13 +1380,15 @@ TH1* RooAbsReal::createHistogram(const char *name, const RooAbsRealLValue& xvar,
   }
   if (pdfSelf && doExtended==2) {
     doExtended = pdfSelf->extendMode()==RooAbsPdf::CanNotBeExtended ? 0 : 1 ;
+  } else if(!pdfSelf) {
+    doExtended = 0;
   }
 
   const char* compSpec = pc.getString("compSpec") ;
   const RooArgSet* compSet = pc.getSet("compSet");
   bool haveCompSel = ( (compSpec && strlen(compSpec)>0) || compSet) ;
 
-  RooBinning* intBinning(0) ;
+  std::unique_ptr<RooBinning> intBinning;
   if (doIntBinning>0) {
     // Given RooAbsPdf* pdf and RooRealVar* obs
     std::unique_ptr<std::list<double>> bl{binBoundaries(const_cast<RooAbsRealLValue&>(xvar),xvar.getMin(),xvar.getMax())};
@@ -1404,7 +1406,7 @@ TH1* RooAbsReal::createHistogram(const char *name, const RooAbsRealLValue& xvar,
       std::vector<double> ba(bl->size());
       int i=0 ;
       for (auto const& elem : *bl) { ba[i++] = elem ; }
-      intBinning = new RooBinning(bl->size()-1,ba.data()) ;
+      intBinning = std::make_unique<RooBinning>(bl->size()-1,ba.data()) ;
     }
   }
 
@@ -1416,7 +1418,6 @@ TH1* RooAbsReal::createHistogram(const char *name, const RooAbsRealLValue& xvar,
     RooCmdArg tmp = RooFit::Binning(*intBinning) ;
     argListCreate.Add(&tmp) ;
     histo = xvar.createHistogram(name,argListCreate) ;
-    delete intBinning ;
   } else {
     histo = xvar.createHistogram(name,argListCreate) ;
   }
@@ -3837,7 +3838,7 @@ void RooAbsReal::preferredObservableScanOrder(const RooArgSet& obs, RooArgSet& o
 ////////////////////////////////////////////////////////////////////////////////
 /// Calls createRunningIntegral(const RooArgSet&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&, const RooCmdArg&)
 
-RooAbsReal* RooAbsReal::createRunningIntegral(const RooArgSet& iset, const RooArgSet& nset)
+RooFit::OwningPtr<RooAbsReal> RooAbsReal::createRunningIntegral(const RooArgSet& iset, const RooArgSet& nset)
 {
   return createRunningIntegral(iset,RooFit::SupNormSet(nset)) ;
 }
@@ -3881,7 +3882,7 @@ RooAbsReal* RooAbsReal::createRunningIntegral(const RooArgSet& iset, const RooAr
 /// | `ScanAll()`                            | Always apply scanning technique
 /// | `ScanNone()`                           | Never apply scanning technique
 
-RooAbsReal* RooAbsReal::createRunningIntegral(const RooArgSet& iset, const RooCmdArg& arg1, const RooCmdArg& arg2,
+RooFit::OwningPtr<RooAbsReal> RooAbsReal::createRunningIntegral(const RooArgSet& iset, const RooCmdArg& arg1, const RooCmdArg& arg2,
              const RooCmdArg& arg3, const RooCmdArg& arg4, const RooCmdArg& arg5,
              const RooCmdArg& arg6, const RooCmdArg& arg7, const RooCmdArg& arg8)
 {
@@ -3941,14 +3942,14 @@ RooAbsReal* RooAbsReal::createRunningIntegral(const RooArgSet& iset, const RooCm
 /// Utility function for createRunningIntegral that construct an object
 /// implementing the numeric scanning technique for calculating the running integral
 
-RooAbsReal* RooAbsReal::createScanRI(const RooArgSet& iset, const RooArgSet& nset, Int_t numScanBins, Int_t intOrder)
+RooFit::OwningPtr<RooAbsReal> RooAbsReal::createScanRI(const RooArgSet& iset, const RooArgSet& nset, Int_t numScanBins, Int_t intOrder)
 {
   std::string name = std::string(GetName()) + "_NUMRUNINT_" + integralNameSuffix(iset,&nset).Data() ;
   RooRealVar* ivar = (RooRealVar*) iset.first() ;
   ivar->setBins(numScanBins,"numcdf") ;
-  RooNumRunningInt* ret = new RooNumRunningInt(name.c_str(),name.c_str(),*this,*ivar,"numrunint") ;
+  auto ret = std::make_unique<RooNumRunningInt>(name.c_str(),name.c_str(),*this,*ivar,"numrunint") ;
   ret->setInterpolationOrder(intOrder) ;
-  return ret ;
+  return RooFit::OwningPtr<RooAbsReal>{ret.release()};
 }
 
 
@@ -3958,7 +3959,7 @@ RooAbsReal* RooAbsReal::createScanRI(const RooArgSet& iset, const RooArgSet& nse
 /// object implementing the standard (analytical) integration
 /// technique for calculating the running integral.
 
-RooAbsReal* RooAbsReal::createIntRI(const RooArgSet& iset, const RooArgSet& nset)
+RooFit::OwningPtr<RooAbsReal> RooAbsReal::createIntRI(const RooArgSet& iset, const RooArgSet& nset)
 {
   // Make std::list of input arguments keeping only RooRealVars
   RooArgList ilist ;
@@ -4003,14 +4004,14 @@ RooAbsReal* RooAbsReal::createIntRI(const RooArgSet& iset, const RooArgSet& nset
   // Construct final normalization set for c.d.f = integrated observables + any extra specified by user
   RooArgSet finalNset(nset) ;
   finalNset.add(cloneList,true) ;
-  RooAbsReal* cdf = tmp->createIntegral(cloneList,finalNset,"CDF") ;
+  std::unique_ptr<RooAbsReal> cdf{tmp->createIntegral(cloneList,finalNset,"CDF")};
 
   // Transfer ownership of cloned items to top-level c.d.f object
   cdf->addOwnedComponents(*tmp) ;
   cdf->addOwnedComponents(cloneList) ;
   cdf->addOwnedComponents(loList) ;
 
-  return cdf ;
+  return RooFit::OwningPtr<RooAbsReal>{cdf.release()};
 }
 
 

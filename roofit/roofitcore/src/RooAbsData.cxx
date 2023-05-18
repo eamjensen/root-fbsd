@@ -177,6 +177,30 @@ RooAbsData::RooAbsData()
   RooTrace::create(this) ;
 }
 
+void RooAbsData::initializeVars(RooArgSet const& vars)
+{
+   if(!_vars.empty()) {
+      throw std::runtime_error("RooAbsData::initializeVars(): the variables are already initialized!");
+   }
+
+   // clone the fundamentals of the given data set into internal buffer
+   for (const auto var : vars) {
+      if (!var->isFundamental()) {
+         coutE(InputArguments) << "RooAbsDataStore::initialize(" << GetName()
+                               << "): Data set cannot contain non-fundamental types, ignoring " << var->GetName()
+                               << endl;
+         throw std::invalid_argument(std::string("Only fundamental variables can be placed into datasets. This is violated for ") + var->GetName());
+      } else {
+         _vars.addClone(*var);
+      }
+   }
+
+   // reconnect any parameterized ranges to internal dataset observables
+   for (auto var : _vars) {
+      var->attachArgs(_vars);
+   }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /// Constructor from a set of variables. Only fundamental elements of vars
 /// (RooRealVar,RooCategory etc) are stored as part of the dataset
@@ -197,22 +221,7 @@ RooAbsData::RooAbsData(RooStringView name, RooStringView title, const RooArgSet&
    // cout << "created dataset " << this << endl ;
    claimVars(this);
 
-   // clone the fundamentals of the given data set into internal buffer
-   for (const auto var : vars) {
-      if (!var->isFundamental()) {
-         coutE(InputArguments) << "RooAbsDataStore::initialize(" << GetName()
-                               << "): Data set cannot contain non-fundamental types, ignoring " << var->GetName()
-                               << endl;
-         throw std::invalid_argument(std::string("Only fundamental variables can be placed into datasets. This is violated for ") + var->GetName());
-      } else {
-         _vars.addClone(*var);
-      }
-   }
-
-   // reconnect any parameterized ranges to internal dataset observables
-   for (auto var : _vars) {
-      var->attachArgs(_vars);
-   }
+   initializeVars(vars);
 
    _namePtr = RooNameReg::instance().constPtr(GetName()) ;
 
@@ -1602,12 +1611,7 @@ SplittingSetup initSplit(RooAbsData const &data, RooAbsCategory const &splitCat)
 
    // Add weight variable explicitly if dataset has weights, but no top-level weight
    // variable exists (can happen with composite datastores)
-   if (data.isWeighted() && !data.IsA()->InheritsFrom(RooDataHist::Class())) {
-      auto newweight = std::make_unique<RooRealVar>("weight", "weight", -1e9, 1e9);
-      setup.subsetVars.add(*newweight);
-      setup.addWeightVar = true;
-      setup.ownedSet.addOwned(std::move(newweight));
-   }
+   setup.addWeightVar = data.isWeighted();
 
    return setup;
 }
@@ -1620,21 +1624,19 @@ TList *splitImpl(RooAbsData const &data, const RooAbsCategory &cloneCat, bool cr
    // If createEmptyDataSets is true, prepopulate with empty sets corresponding to all states
    if (createEmptyDataSets) {
       for (const auto &nameIdx : cloneCat) {
-         RooAbsData *subset = createEmptyData(nameIdx.first.c_str());
-         dsetList->Add((RooAbsArg *)subset);
+         dsetList->Add(createEmptyData(nameIdx.first.c_str()));
       }
    }
 
    // Loop over dataset and copy event to matching subset
-   const bool propWeightSquared = data.isWeighted();
    for (Int_t i = 0; i < data.numEntries(); ++i) {
       const RooArgSet *row = data.get(i);
-      RooAbsData *subset = (RooAbsData *)dsetList->FindObject(cloneCat.getCurrentLabel());
+      auto subset = static_cast<RooAbsData *>(dsetList->FindObject(cloneCat.getCurrentLabel()));
       if (!subset) {
          subset = createEmptyData(cloneCat.getCurrentLabel());
-         dsetList->Add((RooAbsArg *)subset);
+         dsetList->Add(subset);
       }
-      subset->add(*row, data.weight(), propWeightSquared ? data.weightSquared() : 0.0);
+      subset->add(*row, data.weight(), data.weightError());
    }
 
    return dsetList;
