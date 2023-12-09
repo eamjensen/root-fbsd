@@ -4,7 +4,9 @@
 ## Multidimensional models: normalization and  integration of pdfs, construction of
 ## cumulative distribution functions from pdfs in two dimensions
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -20,8 +22,8 @@ x = ROOT.RooRealVar("x", "x", -10, 10)
 y = ROOT.RooRealVar("y", "y", -10, 10)
 
 # Create pdf gaussx(x,-2,3), gaussy(y,2,2)
-gx = ROOT.RooGaussian("gx", "gx", x, ROOT.RooFit.RooConst(-2), ROOT.RooFit.RooConst(3))
-gy = ROOT.RooGaussian("gy", "gy", y, ROOT.RooFit.RooConst(+2), ROOT.RooFit.RooConst(2))
+gx = ROOT.RooGaussian("gx", "gx", x, -2.0, 3.0)
+gy = ROOT.RooGaussian("gy", "gy", y, +2.0, 2.0)
 
 # gxy = gx(x)*gy(y)
 gxy = ROOT.RooProdPdf("gxy", "gxy", [gx, gy])
@@ -54,7 +56,7 @@ print("gx_Norm[x] = ", gxy.getVal(nset_x))
 nset_y = {y}
 print("gx_Norm[y] = ", gxy.getVal(nset_y))
 
-# Integarte normalizes pdf over subrange
+# Integrate normalized pdf over subrange
 # ----------------------------------------------------------------------------
 
 # Define a range named "signal" in x from -5,5

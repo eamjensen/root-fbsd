@@ -10,16 +10,17 @@
  * listed in LICENSE (http://roofit.sourceforge.net/license.txt)
  */
 
-#include <RooWorkspace.h>
-#include <RooPlot.h>
-#include <RooDataSet.h>
-#include <RooFit/TestStatistics/buildLikelihood.h>
 #include <RooAbsPdf.h>
-#include <RooRealVar.h>
-#include <RooFit/TestStatistics/RooRealL.h>
+#include <RooDataSet.h>
 #include <RooFit/MultiProcess/Config.h>
+#include <RooFit/TestStatistics/RooRealL.h>
+#include <RooFit/TestStatistics/buildLikelihood.h>
+#include <RooHelpers.h>
 #include <RooMinimizer.h>
+#include <RooPlot.h>
+#include <RooRealVar.h>
 #include <RooUnitTest.h>
+#include <RooWorkspace.h>
 
 #include <TFile.h>
 
@@ -106,6 +107,8 @@ TEST(TestStatisticsPlot, RooRealL)
    // Run the RooUnitTest and assert that it succeeds with gtest
 
    RooUnitTest::setMemDir(gDirectory);
+
+   gErrorIgnoreLevel = kWarning;
 
    TFile fref("TestStatistics_ref.root");
 

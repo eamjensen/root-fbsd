@@ -12,20 +12,19 @@
 
 #include <RooFit/Detail/JSONInterface.h>
 
+#include "JSONParser.h"
 #ifdef ROOFIT_WITH_RYML
 #include "RYMLParser.h"
-using Tree_t = TRYMLTree;
-#else
-#include "JSONParser.h"
-using Tree_t = TJSONTree;
 #endif
 
+#include <sstream>
+
 namespace {
-template <class Nd>
-class ChildItImpl final : public RooFit::Detail::JSONNode::child_iterator_t<Nd>::Impl {
+template <class Node_t>
+class ChildItImpl final : public RooFit::Detail::JSONNode::child_iterator_t<Node_t>::Impl {
 public:
-   using child_iterator = RooFit::Detail::JSONNode::child_iterator_t<Nd>;
-   ChildItImpl(Nd &n, size_t p) : node(n), pos(p) {}
+   using child_iterator = RooFit::Detail::JSONNode::child_iterator_t<Node_t>;
+   ChildItImpl(Node_t &n, size_t p) : node(n), pos(p) {}
    ChildItImpl(const ChildItImpl &other) : node(other.node), pos(other.pos) {}
    std::unique_ptr<typename child_iterator::Impl> clone() const override
    {
@@ -33,15 +32,15 @@ public:
    }
    void forward() override { ++pos; }
    void backward() override { --pos; }
-   Nd &current() override { return node.child(pos); }
+   Node_t &current() override { return node.child(pos); }
    bool equal(const typename child_iterator::Impl &other) const override
    {
-      auto it = dynamic_cast<const ChildItImpl<Nd> *>(&other);
+      auto it = dynamic_cast<const ChildItImpl<Node_t> *>(&other);
       return it && &(it->node) == &(this->node) && (it->pos) == this->pos;
    }
 
 private:
-   Nd &node;
+   Node_t &node;
    size_t pos;
 };
 } // namespace
@@ -69,35 +68,75 @@ std::ostream &operator<<(std::ostream &os, JSONNode const &s)
    return os;
 }
 
-template <>
-int JSONNode::val_t<int>() const
+template <typename... Args>
+std::unique_ptr<JSONTree> JSONTree::createImpl(Args &&...args)
 {
-   return val_int();
-}
-template <>
-double JSONNode::val_t<double>() const
-{
-   return val_double();
-}
-template <>
-bool JSONNode::val_t<bool>() const
-{
-   return val_bool();
-}
-template <>
-std::string JSONNode::val_t<std::string>() const
-{
-   return val();
+   if (getBackendEnum() == Backend::Ryml) {
+#ifdef ROOFIT_WITH_RYML
+      return std::make_unique<TRYMLTree>(std::forward<Args>(args)...);
+#else
+      throw std::runtime_error(
+         "Requesting JSON tree with rapidyaml backend, but rapidyaml could not be found by ROOT when it was compiled.");
+#endif
+   }
+   return std::make_unique<TJSONTree>(std::forward<Args>(args)...);
 }
 
 std::unique_ptr<JSONTree> JSONTree::create()
 {
-   return std::make_unique<Tree_t>();
+   return createImpl();
 }
 
 std::unique_ptr<JSONTree> JSONTree::create(std::istream &is)
 {
-   return std::make_unique<Tree_t>(is);
+   return createImpl(is);
+}
+
+std::unique_ptr<JSONTree> JSONTree::create(std::string const &str)
+{
+   std::stringstream ss{str};
+   return JSONTree::create(ss);
+}
+
+/// Check if ROOT was compiled with support for a certain JSON backend library.
+/// \param[in] name Name of the backend.
+bool JSONTree::hasBackend(std::string const &name)
+{
+   if (name == "rapidyaml") {
+#ifdef ROOFIT_WITH_RYML
+      return true;
+#else
+      return false;
+#endif
+   }
+   if (name == "nlohmann-json")
+      return true;
+   return false;
+}
+
+JSONTree::Backend &JSONTree::getBackendEnum()
+{
+   static Backend backend = Backend::NlohmannJson;
+   return backend;
+}
+
+/// Returns the name of the library that serves as the backend for the JSON
+/// interface, which is either `"nlohmann-json"` or `"rapidyaml"`.
+/// \return Backend name as a string.
+std::string JSONTree::getBackend()
+{
+   return getBackendEnum() == Backend::Ryml ? "rapidyaml" : "nlohmann-json";
+}
+
+/// Set the library that serves as the backend for the JSON interface. Note that the `"rapidyaml"` backend is only
+/// supported if rapidyaml was found on the system when ROOT was compiled. \param[in] name Name of the backend, can be
+/// either `"nlohmann-json"` or `"rapidyaml"`.
+void JSONTree::setBackend(std::string const &name)
+{
+   if (name == "rapidyaml")
+      getBackendEnum() = Backend::Ryml;
+   if (name == "nlohmann-json")
+      getBackendEnum() = Backend::NlohmannJson;
 }
 
 } // namespace Detail

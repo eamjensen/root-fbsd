@@ -109,8 +109,7 @@ RooIntegralMorph::RooIntegralMorph(const char *name, const char *title,
   pdf2("pdf2","pdf2",this,_pdf2),
   x("x","x",this,_x),
   alpha("alpha","alpha",this,_alpha),
-  _cacheAlpha(doCacheAlpha),
-  _cache(0)
+  _cacheAlpha(doCacheAlpha)
 {
 }
 
@@ -123,8 +122,7 @@ RooIntegralMorph::RooIntegralMorph(const RooIntegralMorph& other, const char* na
   pdf2("pdf2",this,other.pdf2),
   x("x",this,other.x),
   alpha("alpha",this,other.alpha),
-  _cacheAlpha(other._cacheAlpha),
-  _cache(0)
+  _cacheAlpha(other._cacheAlpha)
 {
 }
 
@@ -133,14 +131,14 @@ RooIntegralMorph::RooIntegralMorph(const RooIntegralMorph& other, const char* na
 /// Returns the 'x' observable unless doCacheAlpha is set in which
 /// case a set with both x and alpha
 
-RooArgSet* RooIntegralMorph::actualObservables(const RooArgSet& /*nset*/) const
+RooFit::OwningPtr<RooArgSet> RooIntegralMorph::actualObservables(const RooArgSet& /*nset*/) const
 {
   RooArgSet* obs = new RooArgSet ;
   if (_cacheAlpha) {
     obs->add(alpha.arg()) ;
   }
   obs->add(x.arg()) ;
-  return obs ;
+  return RooFit::OwningPtr<RooArgSet>{obs};
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -149,9 +147,9 @@ RooArgSet* RooIntegralMorph::actualObservables(const RooArgSet& /*nset*/) const
 
 RooFit::OwningPtr<RooArgSet> RooIntegralMorph::actualParameters(const RooArgSet& /*nset*/) const
 {
-  auto par1 = pdf1.arg().getParameters(static_cast<RooArgSet*>(nullptr));
+  auto par1 = pdf1->getParameters(static_cast<RooArgSet*>(nullptr));
   RooArgSet par2;
-  pdf2.arg().getParameters(nullptr, par2);
+  pdf2->getParameters(nullptr, par2);
   par1->add(par2,true) ;
   par1->remove(x.arg(),true,true) ;
   if (!_cacheAlpha) {
@@ -248,8 +246,8 @@ RooIntegralMorph::MorphCacheElem::MorphCacheElem(RooIntegralMorph& self, const R
   _pdf2 = (RooAbsPdf*)(self.pdf2.absArg()) ;
   _c1 = std::unique_ptr<RooAbsReal>{_pdf1->createCdf(*_x)};
   _c2 = std::unique_ptr<RooAbsReal>{_pdf2->createCdf(*_x)};
-  _cb1 = _c1->bindVars(*_x,_nset.get());
-  _cb2 = _c2->bindVars(*_x,_nset.get());
+  _cb1 = std::unique_ptr<RooAbsFunc>{_c1->bindVars(*_x,_nset.get())};
+  _cb2 = std::unique_ptr<RooAbsFunc>{_c2->bindVars(*_x,_nset.get())};
   _self = &self ;
 
   _rf1 = std::make_unique<RooBrentRootFinder>(*_cb1);
