@@ -6,7 +6,7 @@
 
 set(ROOT_PLATFORM linux)
 
-if(CMAKE_SYSTEM_PROCESSOR MATCHES x86_64 OR CMAKE_SYSTEM_PROCESSOR MATCHES amd64)
+if(CMAKE_SYSTEM_PROCESSOR MATCHES x86_64)
   if(CMAKE_CXX_COMPILER_ID STREQUAL Intel)
     set(ROOT_ARCHITECTURE linuxx8664icc)
   else()
@@ -23,12 +23,14 @@ elseif(CMAKE_SYSTEM_PROCESSOR MATCHES aarch64)
   set(ROOT_ARCHITECTURE linuxarm64)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES arm)
   set(ROOT_ARCHITECTURE linuxarm)
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES ppc64 OR CMAKE_SYSTEM_PROCESSOR MATCHES powerpc64 OR CMAKE_SYSTEM_PROCESSOR MATCHES powerpc64le)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES ppc64)
   set(ROOT_ARCHITECTURE linuxppc64gcc)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES s390x)
   set(ROOT_ARCHITECTURE linuxs390xgcc)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES s390)
   set(ROOT_ARCHITECTURE linuxs390gcc)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES riscv64)
+  set(ROOT_ARCHITECTURE linuxriscv64)
 else()
   message(FATAL_ERROR "Unknown processor: ${CMAKE_SYSTEM_PROCESSOR}")
 endif()
@@ -52,17 +54,12 @@ if(dev)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gsplit-dwarf")
   endif()
 
-  # Try faster linkers, prefer lld then gold.
+  # Try faster lld:
   execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=lld -Wl,--version OUTPUT_VARIABLE stdout ERROR_QUIET)
   if("${stdout}" MATCHES "LLD ")
     set(SUPERIOR_LINKER "lld")
-  else()
-    execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version OUTPUT_VARIABLE stdout ERROR_QUIET)
-    if ("${stdout}" MATCHES "GNU gold")
-      set(SUPERIOR_LINKER "gold")
-    endif()
   endif()
-  # Only lld and gold support --gdb-index
+  # Only lld supports --gdb-index
   if(SUPERIOR_LINKER)
     set(LLVM_USE_LINKER "${SUPERIOR_LINKER}")
     if(_BUILD_TYPE_UPPER MATCHES "DEB")
@@ -103,10 +100,6 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL Clang)
   endif()
 
   set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
-
-  if(CMAKE_SYSTEM_NAME MATCHES FreeBSD)
-    set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -lexecinfo -lcrypt")
-  endif()
 
   if(asan)
     # See also core/sanitizer/README.md for what's happening.
