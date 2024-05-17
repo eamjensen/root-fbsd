@@ -698,11 +698,6 @@ namespace {
                               clingIncLoc.str().str(), MOverlay,
                               /*RegisterModuleMap=*/ true,
                               /*AllowModulemapOverride=*/ false);
-#elif __FreeBSD__ // See 'FreeBSD port maintainer note' in core/clingutils/CMakeLists.txt
-    maybeAppendOverlayEntry(stdIncLoc.str(), "std_fbsd.modulemap",
-                            clingIncLoc.str().str(), MOverlay,
-                            /*RegisterModuleMap=*/ true,
-                            /*AllowModulemapOverride=*/ false);
 #else
     maybeAppendOverlayEntry(cIncLoc.str(), "libc.modulemap",
                             clingIncLoc.str().str(), MOverlay,
