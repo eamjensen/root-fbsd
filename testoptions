@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+pjail="140amd64"
+pbranch="quarterly"
+pport="quarterly"
+pproj="devel/root"
+
+mkfile="/usr/local/poudriere/ports/${pport}/${pproj}/Makefile"
+pdconf="/usr/local/etc/poudriere.d"
+pddata="/usr/local/poudriere/data"
+pdcmd="poudriere testport -b ${pbranch} -j ${pjail} -o ${pproj} -p ${pport} -vv"
+
+OPTS=$(gawk '$1 == "OPTIONS_DEFINE=" {
+               for (i = 2; i <= NF; i++) {
+                 if (i == NF) x=$i
+                 else print $i
+               }
+               while (x == "\\") {
+                 getline
+                 for (i = 1; i <= NF; i++) {
+                   if (i == NF) x=$i
+                   if ($i != "\\") print $i
+                 }
+               }
+             }' $mkfile)
+
+for opt in "" $OPTS ; do
+  identifier=$opt
+  [ -n "$opt" ] || identifier="EMPTY"
+
+  # TODO: Use regular ${pjail}-${pport} as fetch url
+  #  cfgfile="${pdconf}/${pjail}-${pport}-${identifier}-poudriere.conf"
+  #  sudo rm -f $cfgfile ; sudo touch $cfgfile ; sudo chmod g+w $cfgfile
+  #  sudo echo "PACKAGE_FETCH_URL=file://${pddata}/packages/${pjail}-${pport}" > $cfgfile
+
+  optdir="${pdconf}/${pjail}-${pport}-${identifier}-options/${pproj/\//_}"
+  optfile="${optdir}/options"
+  sudo mkdir -p $optdir
+  sudo rm -f $optfile ; sudo touch $optfile ; sudo chmod g+w $optfile
+
+  for other_opt in $OPTS ; do
+    if [ "$other_opt" == "$opt" ] ; then
+      sudo echo "OPTIONS_FILE_SET+=$other_opt" >> $optdir/options
+    else
+      sudo echo "OPTIONS_FILE_UNSET+=$other_opt" >> $optdir/options
+    fi
+  done
+
+  sudo bash -c "${pdcmd} -z $identifier"
+done
