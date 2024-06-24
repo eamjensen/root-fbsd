@@ -1525,7 +1525,7 @@ namespace {
             const unsigned ID = Diags->getCustomDiagID(
                                        clang::DiagnosticsEngine::Level::Error,
                                        "Problems loading PCH: '%0'.");
-
+            
             Diags->Report(ID) << PCHFile;
             // If this was the only error, then don't let it stop anything
             if (Diags->getClient()->getNumErrors() == 1)
