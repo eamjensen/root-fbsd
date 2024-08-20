@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-pjail="140amd64"
+pjail="141amd64"
 pbranch="quarterly"
 pport="quarterly"
 pproj="devel/root"
