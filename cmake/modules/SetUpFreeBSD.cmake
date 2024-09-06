@@ -11,7 +11,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES x86_64 OR CMAKE_SYSTEM_PROCESSOR MATCHES amd64
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES i686)
   set(FP_MATH_FLAGS "-msse2 -mfpmath=sse")
   set(ROOT_ARCHITECTURE freebsdi686)
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES i386) # FreeBSD port maintainer note: Treating i386 as i686 might just work...
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES i386) # FreeBSD port maintainer note: Treating i386 as i686 works
   set(FP_MATH_FLAGS "-msse2 -mfpmath=sse")
   set(ROOT_ARCHITECTURE freebsdi386)
 elseif(CMAKE_SYSTEM_PROCESSOR MATCHES aarch64)

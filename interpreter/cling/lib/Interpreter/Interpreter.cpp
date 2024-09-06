@@ -465,8 +465,17 @@ namespace cling {
     const char* Attr = LangOpts.CPlusPlus ? " throw () " : "";
 #else
     const char* LinkageCxx = Linkage;
+#ifdef __FreeBSD__
+// atexit-like commands need 'throw()' specifier on FreeBSD 15 aarch64
+#if defined(__aarch64__) && __FreeBSD_cc_version >= 1500000
+    const char* Attr = " throw () ";
+#else
     const char* Attr = "";
 #endif
+#else
+    const char* Attr = "";
+#endif // __FreeBSD__
+#endif // __GLIBC__
 
 #if defined(__GLIBCXX__)
     const char* cxa_atexit_is_noexcept = LangOpts.CPlusPlus ? " noexcept" : "";
@@ -889,10 +898,8 @@ namespace cling {
                                     /*AllowExtraSearch*/ true))
       return loadModule(M, complain);
 
-#ifndef __FreeBSD__ // See 'FreeBSD port maintainer note' in core/clingutils/CMakeLists.txt
    if (complain)
      llvm::errs() << "Module " << moduleName << " not found.\n";
-#endif
 
 
    return false;
