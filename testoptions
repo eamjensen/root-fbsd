@@ -10,23 +10,52 @@ pdconf="/usr/local/etc/poudriere.d"
 pddata="/usr/local/poudriere/data"
 pdcmd="poudriere testport -b ${pbranch} -j ${pjail} -o ${pproj} -p ${pport} -vv"
 
-OPTS=$(gawk '$1 == "OPTIONS_DEFINE=" {
-               for (i = 2; i <= NF; i++) {
-                 if (i == NF) x=$i
-                 else print $i
-               }
-               while (x == "\\") {
-                 getline
-                 for (i = 1; i <= NF; i++) {
-                   if (i == NF) x=$i
-                   if ($i != "\\") print $i
-                 }
-               }
-             }' $mkfile)
 
-for opt in "" $OPTS ; do
+
+if [[ $# -eq 0 ]] ; then
+  echo "Testing with each individual port option (EMPTY implies all options disabled)."
+  OPTS="EMPTY $(gawk '$1 == "OPTIONS_DEFINE=" {
+                 for (i = 2; i <= NF; i++) {
+                   if (i == NF) x=$i
+                   else printf $i " "
+                 }
+                 while (x == "\\") {
+                   getline
+                   for (i = 1; i <= NF; i++) {
+                     if (i == NF) x=$i
+                     if ($i != "\\") printf $i " "
+                   }
+                 }
+               }' $mkfile)"
+elif [[ $1 = "default" ]] ; then
+  _default=1
+  echo "Testing with default port options (one go)."
+else
+  echo "Testing with each individual user-specified option."
+  OPTS="$@"
+fi
+
+if [[ _default -eq 1 ]] ; then
+  echo "Options: See OPTIONS_DEFAULT in $mkfile."
+else
+  echo "Options: $OPTS"
+fi
+sleep 5
+
+
+
+if [[ _default -eq 1 ]] ; then
+  sudo bash -c "${pdcmd}"
+  exit 0
+fi
+
+
+
+for opt in $OPTS ; do
   identifier=$opt
-  [ -n "$opt" ] || identifier="EMPTY"
+  if [[ "$opt" = "EMPTY" ]] ; then
+    opt=""
+  fi
 
   # TODO: Use regular ${pjail}-${pport} as fetch url
   #  cfgfile="${pdconf}/${pjail}-${pport}-${identifier}-poudriere.conf"
@@ -48,3 +77,5 @@ for opt in "" $OPTS ; do
 
   sudo bash -c "${pdcmd} -z $identifier"
 done
+
+exit 0
