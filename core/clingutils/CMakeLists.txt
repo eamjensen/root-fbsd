@@ -120,8 +120,7 @@ if (runtime_cxxmodules)
 
   # We need to override the default modulemap because instead of producing a
   # single std.pcm, produces hundreds of pcms. This changed with sdk 15.3.
-  if ((CMAKE_SYSTEM_NAME MATCHES Darwin OR CMAKE_SYSTEM_NAME MATCHES FreeBSD) 
-      AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15.0.0.15000309)
+  if (CMAKE_SYSTEM_NAME MATCHES Darwin AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15.0.0.15000309)
     set(custom_modulemaps ${custom_modulemaps} std_darwin.modulemap)
   endif()
 
