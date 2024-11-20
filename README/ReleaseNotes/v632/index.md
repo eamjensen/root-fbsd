@@ -52,6 +52,7 @@ The following people have contributed to this new version:
  Ianna Osborne, Princeton University,\
  Vincenzo Eduardo Padulano, CERN/EP-SFT,\
  Danilo Piparo, CERN/EP-SFT,\
+ Huilin Qu, CERN/EP-CMG,\
  Fons Rademakers, CERN/IT,\
  Jonas Rembser, CERN/EP-SFT,\
  Andrea Rizzi, University of Pisa,\
@@ -781,6 +782,7 @@ Published on August 14, 2024
 * [[#15104](https://github.com/root-project/root/issues/15104)] - new PyROOT/cppyy fails to pickle enums
 * [[#15161](https://github.com/root-project/root/issues/15161)] - Attribute (__getitem__) differences for PyROOT objects in ROOT master
 * [[#15234](https://github.com/root-project/root/issues/15234)] - cppyy - wrong object type when iterating over a polymorphic container
+* [[#15269](https://github.com/root-project/root/issues/15269)] - Iterators in pyROOT working differently in ROOT master compared to 6.30/02
 * [[#15315](https://github.com/root-project/root/issues/15315)] - [PyROOT] Example with inheriting from ROOT.Math.IMultiGenFunction doesn't work after recent cppyy upgrade
 * [[#15425](https://github.com/root-project/root/issues/15425)] - TTreeProcessorMP processes events multiple times when there are more threads than entries
 * [[#15755](https://github.com/root-project/root/issues/15755)] - [RF][HS3] Higgs discovery workspaces roundtrip
@@ -797,5 +799,31 @@ intervals
 * [[ROOT-7991](https://its.cern.ch/jira/browse/ROOT-7991)] - THnSparse::ProjectionND yields disfunctional histogram
 * [[ROOT-8238](https://its.cern.ch/jira/browse/ROOT-8238)] - TPrincipal tries to make histograms with nbin=0
 * [[ROOT-8519](https://its.cern.ch/jira/browse/ROOT-8519)] - Bug when use simple math functions in TTree::SetAlias()
+
+## Release 6.32.06
+
+Published on September 22, 2024
+
+### Items addressed in this release
+
+This is the first ROOT release supporting macOS 15 Sequoia.
+
+* [[#15178](https://github.com/root-project/root/issues/15178)] - ROOT generates CMake warnings when building from the tarball
+* [[#16219](https://github.com/root-project/root/issues/16219)] - Module map on the new XCode version for macos15-beta
+* [[#16249](https://github.com/root-project/root/issues/16249)] - Iterating with a range for does one extra iteration
+* [[ROOT-10902](https://its.cern.ch/jira/browse/ROOT-10902)] - SMatrix read from TTree contains all zeroes
+
+## Release 6.32.08
+
+Published on November 14, 2024
+
+### Items addressed in this release
+
+Besides the fixes listed below, a scaling problem RDataFrame was fixed.
+
+* [[10239](https://github.com/root-project/root/issues/10239)] - "?" wildcard broken in TChain::Add()
+* [[16475](https://github.com/root-project/root/issues/16475)] - Unable to use EOS tokens with RDataFrame since 6.32
+* [[16562](https://github.com/root-project/root/issues/16562)] - TTreeViewer save session absolute path	
+* [[16771](https://github.com/root-project/root/issues/16771)] - Copying a default constructed `TH2Poly` fails.	
 
 ## HEAD of the v6-32-00-patches branch

@@ -819,22 +819,6 @@ TROOT::TROOT(const char *name, const char *title, VoidFuncPtr_t *initfunc)
    TStyle::BuildStyles();
    SetStyle(gEnv->GetValue("Canvas.Style", "Modern"));
 
-   // this is required by rootssh
-   const char *webdisplay = gSystem->Getenv("ROOT_WEBDISPLAY");
-   // not allow to configure web display via rootrc
-   if (!webdisplay || !*webdisplay) {
-      const char *webdisplay_rc = gEnv->GetValue("WebGui.Display", "");
-      if (webdisplay_rc && *webdisplay_rc && (strcmp(webdisplay_rc, "off") != 0)) {
-         printf("\nWARNING!\n");
-         printf("rootrc parameter \"WebGui.Display\" is disabled for security reasons.\n");
-         printf("See https://root.cern/about/security/#2023-11-26-open-port-for-control-of-web-gui-allows-read-and-write-access-to-file-system for more information.\n");
-         printf("For environments controlling the security issues you can enable web display by calling\n");
-         printf("gROOT->SetWebDisplay(); in ROOT prompt or in startup scripts\n\n");
-      }
-   }
-   if (webdisplay && *webdisplay)
-      SetWebDisplay(webdisplay);
-
    // Setup default (batch) graphics and GUI environment
    gBatchGuiFactory = new TGuiFactory;
    gGuiFactory      = gBatchGuiFactory;
@@ -851,6 +835,12 @@ TROOT::TROOT(const char *name, const char *title, VoidFuncPtr_t *initfunc)
    else
       fBatch = kTRUE;
 #endif
+
+   const char *webdisplay = gSystem->Getenv("ROOT_WEBDISPLAY");
+   if (!webdisplay || !*webdisplay)
+      webdisplay = gEnv->GetValue("WebGui.Display", "");
+   if (webdisplay && *webdisplay)
+      SetWebDisplay(webdisplay);
 
    int i = 0;
    while (initfunc && initfunc[i]) {
