@@ -53,9 +53,6 @@ void rf901_numintconfig()
    // Disable analytic integration from demonstration purposes
    landau.forceNumInt(true);
 
-   // Disable analytic integration from demonstration purposes
-   landau.forceNumInt(true);
-
    // Activate debug-level messages for topic integration to be able to follow actions below
    RooMsgService::instance().addStream(DEBUG, Topic(Integration));
 

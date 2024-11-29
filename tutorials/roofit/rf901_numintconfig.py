@@ -43,9 +43,6 @@ landau = ROOT.RooLandau("landau", "landau", x, 0.0, 0.1)
 # Disable analytic integration from demonstration purposes
 landau.forceNumInt(True)
 
-# Disable analytic integration from demonstration purposes
-landau.forceNumInt(True)
-
 # Activate debug-level messages for topic integration to be able to follow
 # actions below
 ROOT.RooMsgService.instance().addStream(ROOT.RooFit.DEBUG, Topic=ROOT.RooFit.Integration)

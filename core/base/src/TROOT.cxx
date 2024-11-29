@@ -2839,8 +2839,6 @@ void TROOT::SetWebDisplay(const char *webdisplay)
 
    fIsWebDisplayBatch = fBatch;
 
-   fIsWebDisplayBatch = fBatch;
-
    if (!strcmp(wd, "off")) {
       fIsWebDisplay = kFALSE;
       fWebDisplay = "off";

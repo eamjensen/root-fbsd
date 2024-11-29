@@ -28,8 +28,6 @@
 
 namespace ROOT {
 
-constexpr int kUnknownCompressionSettings = -1;
-
 /// Helper types to present an offset column as array of collection sizes.
 /// See RField<RNTupleCardinality<SizeT>> for details.
 template <typename SizeT>

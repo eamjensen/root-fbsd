@@ -410,8 +410,6 @@ private:
 
   bool replaceImpl(const RooAbsArg& var1, const RooAbsArg& var2);
 
-  bool replaceImpl(const RooAbsArg& var1, const RooAbsArg& var2);
-
   using HashAssistedFind = RooFit::Detail::HashAssistedFind;
   mutable HashAssistedFind *_hashAssistedFind = nullptr; ///<!
   std::size_t _sizeThresholdForMapSearch = 100; ///<!

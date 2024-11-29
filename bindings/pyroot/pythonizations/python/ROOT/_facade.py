@@ -8,8 +8,6 @@ import cppyy
 
 import cppyy.ll
 
-from libROOTPythonizations import gROOT
-
 from ._application import PyROOTApplication
 from ._numbadeclare import _NumbaDeclareDecorator
 

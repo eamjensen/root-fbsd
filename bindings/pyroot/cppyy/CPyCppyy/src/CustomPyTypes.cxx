@@ -294,7 +294,6 @@ static PyObject* im_call(PyObject* meth, PyObject* args, PyObject* kw)
 //-----------------------------------------------------------------------------
 static PyObject* im_descr_get(PyObject* meth, PyObject* obj, PyObject* pyclass)
 {
-
 // from instancemethod: don't rebind an already bound method, or an unbound method
 // of a class that's not a base class of pyclass
     if (CustomInstanceMethod_GET_SELF(meth)

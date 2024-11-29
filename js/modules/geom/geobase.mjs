@@ -3162,12 +3162,6 @@ class ClonedNodes {
          if (this._cfg?.set_origin && this.origin)
             obj3d.userData = this.origin[node.id];
 
-         if (this._cfg?.set_names)
-            obj3d.name = this.getNodeName(node.id);
-
-         if (this._cfg?.set_origin && this.origin)
-            obj3d.userData = this.origin[node.id];
-
          if (node.abs_matrix) {
             obj3d.absMatrix = new THREE.Matrix4();
             obj3d.absMatrix.fromArray(node.matrix);

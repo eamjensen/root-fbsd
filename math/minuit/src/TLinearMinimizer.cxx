@@ -202,8 +202,6 @@ bool TLinearMinimizer::Minimize() {
 
    fNFree = fFitter->GetNumberFreeParameters();
 
-   fNFree = fFitter->GetNumberFreeParameters();
-
    int iret = 0;
    if (!fRobust)
       iret = fFitter->Eval();
