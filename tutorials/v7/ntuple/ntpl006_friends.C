@@ -10,8 +10,7 @@
 /// \author The ROOT Team
 
 // NOTE: The RNTuple classes are experimental at this point.
-// Functionality, interface, and data format is still subject to changes.
-// Do not use for real data!
+// Functionality and interface are still subject to changes.
 
 #include <ROOT/RNTupleModel.hxx>
 #include <ROOT/RNTupleReader.hxx>
@@ -28,6 +27,7 @@ constexpr char const* kNTupleMainFileName = "ntpl006_data.root";
 constexpr char const* kNTupleFriendFileName = "ntpl006_reco.root";
 
 using RNTupleModel = ROOT::Experimental::RNTupleModel;
+using RNTupleOpenSpec = ROOT::Experimental::RNTupleOpenSpec;
 using RNTupleReader = ROOT::Experimental::RNTupleReader;
 using RNTupleWriter = ROOT::Experimental::RNTupleWriter;
 
@@ -69,9 +69,7 @@ void ntpl006_friends()
 {
    Generate();
 
-   std::vector<RNTupleReader::ROpenSpec> friends{
-      {"data", kNTupleMainFileName},
-      {"reco", kNTupleFriendFileName} };
+   std::vector<RNTupleOpenSpec> friends{{"data", kNTupleMainFileName}, {"reco", kNTupleFriendFileName}};
    auto ntuple = RNTupleReader::OpenFriends(friends);
 
    auto c = new TCanvas("c", "", 200, 10, 700, 500);

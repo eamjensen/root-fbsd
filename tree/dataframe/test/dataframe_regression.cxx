@@ -10,11 +10,6 @@
 
 #include "gtest/gtest.h"
 
-// Backward compatibility for gtest version < 1.10.0
-#ifndef INSTANTIATE_TEST_SUITE_P
-#define INSTANTIATE_TEST_SUITE_P INSTANTIATE_TEST_CASE_P
-#endif
-
 // Fixture for all tests in this file. If parameter is true, run with implicit MT, else run sequentially
 class RDFRegressionTests : public ::testing::TestWithParam<bool> {
 protected:
@@ -324,6 +319,16 @@ TEST_P(RDFRegressionTests, FileNameQueryNoExt)
    constexpr auto fileNameWithQuery{"dataframe_regression_filenamequerynoext?myq=xyz"};
    ROOT::RDataFrame df{dataset.fTreeName, fileNameWithQuery};
    EXPECT_EQ(df.Count().GetValue(), 10);
+}
+
+TEST_P(RDFRegressionTests, EmptyFileList)
+{
+   try {
+      ROOT::RDataFrame df{"", {}};
+   } catch (const std::invalid_argument &e) {
+      const std::string expected{"RDataFrame: empty list of input files."};
+      EXPECT_EQ(e.what(), expected);
+   }
 }
 
 // run single-thread tests

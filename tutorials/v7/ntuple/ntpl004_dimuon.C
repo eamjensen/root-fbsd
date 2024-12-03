@@ -14,8 +14,7 @@
 /// \author The ROOT Team
 
 // NOTE: The RNTuple classes are experimental at this point.
-// Functionality, interface, and data format is still subject to changes.
-// Do not use for real data!
+// Functionality and interface are still subject to changes.
 
 #include <ROOT/RDataFrame.hxx>
 #include <ROOT/RNTupleDS.hxx>
@@ -37,7 +36,7 @@
 // Import classes from experimental namespace for the time being
 using RNTupleDS = ROOT::Experimental::RNTupleDS;
 
-constexpr char const* kNTupleFileName = "http://root.cern/files/tutorials/ntpl004_dimuon_v1rc2.root";
+constexpr char const *kNTupleFileName = "http://root.cern/files/tutorials/ntpl004_dimuon_v1.root";
 
 using namespace ROOT::VecOps;
 

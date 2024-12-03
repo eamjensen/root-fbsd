@@ -427,8 +427,10 @@ int main( int argc, char **argv )
          else
             newcomp = ROOT::RCompressionSetting::EDefaults::kUseCompiledDefault;
          delete firstInput;
+         fileMerger.SetMergeOptions(TString("first_source_compression"));
       } else {
          newcomp = ROOT::RCompressionSetting::EDefaults::kUseCompiledDefault;
+         fileMerger.SetMergeOptions(TString("default_compression"));
       }
    }
    if (verbosity > 1) {
@@ -481,13 +483,13 @@ int main( int argc, char **argv )
          merger.SetFastMethod(kFALSE);
       } else {
          if (!keepCompressionAsIs && merger.HasCompressionChange()) {
-            // Don't warn if the user any request re-optimization.
-            std::cout << "hadd Sources and Target have different compression levels" << std::endl;
+            // Don't warn if the user explicitly requested re-optimization.
+            std::cout << "hadd Sources and Target have different compression settings\n";
             std::cout << "hadd merging will be slower" << std::endl;
          }
       }
       merger.SetNotrees(noTrees);
-      merger.SetMergeOptions(cacheSize);
+      merger.SetMergeOptions(TString(merger.GetMergeOptions()) + " " + cacheSize);
       merger.SetIOFeatures(features);
       Bool_t status;
       if (append)

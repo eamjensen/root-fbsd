@@ -304,9 +304,6 @@ int xRooNLLVar::xRooHypoSpace::scan(const char *type, size_t nPoints, double low
    if (p->hasRange("scan")) {
       ::Info("xRooHypoSpace::scan", "Using %s scan range: %g - %g", p->GetName(), p->getMin("scan"), p->getMax("scan"));
    }
-   if (!std::isnan(low) && !std::isnan(high) && !(std::isinf(low) && std::isinf(high))) {
-      p->setRange("scan", low, high);
-   }
 
    bool doObs = false;
    for (auto nSigma : nSigmas) {

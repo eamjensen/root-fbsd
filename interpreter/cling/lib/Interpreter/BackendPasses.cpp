@@ -20,12 +20,12 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/PassPlugin.h"
 #include "llvm/Passes/StandardInstrumentations.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/Transforms/IPO/Inliner.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils.h"
 
@@ -85,7 +85,7 @@ namespace {
 
         llvm::SmallVector<Constant*> NewCtorArgs;
         NewCtorArgs.push_back(
-            llvm::ConstantInt::get(PriorityC->getType(), Priority));
+            llvm::ConstantInt::get(PriorityC->getIntegerType(), Priority));
         // Copy the function and data Constant, if present.
         NewCtorArgs.push_back(Ctor->getOperand(1));
         if (Ctor->getNumOperands() >= 3) {
@@ -417,9 +417,9 @@ void BackendPasses::CreatePasses(int OptLevel, llvm::ModulePassManager& MPM,
   // TODO: Remove this pass once we upgrade past LLVM 19 that includes the fix.
   MPM.addPass(WorkAroundConstructorPriorityBugPass());
   MPM.addPass(KeepLocalGVPass());
-  MPM.addPass(PreventLocalOptPass());
   MPM.addPass(WeakTypeinfoVTablePass());
   MPM.addPass(ReuseExistingWeakSymbols(m_JIT));
+  MPM.addPass(PreventLocalOptPass());
 
   // Run verifier after local passes to make sure that IR remains untouched.
   if (m_CGOpts.VerifyModule)
@@ -459,11 +459,19 @@ void BackendPasses::CreatePasses(int OptLevel, llvm::ModulePassManager& MPM,
     });
   }
 
-  SI.registerCallbacks(PIC, &FAM);
+  SI.registerCallbacks(PIC, &MAM);
 
   PipelineTuningOptions PTO;
   std::optional<PGOOptions> PGOOpt;
   PassBuilder PB(&m_TM, PTO, PGOOpt, &PIC);
+
+  // Attempt to load pass plugins and register their callbacks with PB.
+  for (auto& PluginFN : m_CGOpts.PassPlugins) {
+    auto PassPlugin = PassPlugin::Load(PluginFN);
+    if (PassPlugin) {
+      PassPlugin->registerPassBuilderCallbacks(PB);
+    }
+  }
 
   if (!m_CGOpts.DisableLLVMPasses) {
     // Use the default pass pipeline. We also have to map our optimization
@@ -509,12 +517,9 @@ void BackendPasses::runOnModule(Module& M, int OptLevel) {
 
   CreatePasses(OptLevel, MPM, LAM, FAM, CGAM, MAM, PIC, SI);
 
-  static constexpr std::array<llvm::CodeGenOpt::Level, 4> CGOptLevel {{
-    llvm::CodeGenOpt::None,
-    llvm::CodeGenOpt::Less,
-    llvm::CodeGenOpt::Default,
-    llvm::CodeGenOpt::Aggressive
-  }};
+  static constexpr std::array<llvm::CodeGenOptLevel, 4> CGOptLevel{
+      {llvm::CodeGenOptLevel::None, llvm::CodeGenOptLevel::Less,
+       llvm::CodeGenOptLevel::Default, llvm::CodeGenOptLevel::Aggressive}};
   // TM's OptLevel is used to build orc::SimpleCompiler passes for every Module.
   m_TM.setOptLevel(CGOptLevel[OptLevel]);
 

@@ -1,0 +1,6 @@
+pythia8=OFF
+<<<<<<<< HEAD:.github/workflows/root-ci-config/buildconfig/ubuntu2404.txt
+tmva-cpu=OFF
+========
+mysql=OFF
+>>>>>>>> refs/tags/v6-34-00:.github/workflows/root-ci-config/buildconfig/debian125.txt

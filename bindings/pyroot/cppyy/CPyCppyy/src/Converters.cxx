@@ -203,6 +203,7 @@ static bool IsPyCArgObject(PyObject* pyobject)
     return Py_TYPE(pyobject) == pycarg_type;
 }
 
+#if PY_VERSION_HEX < 0x30d0000
 static bool IsCTypesArrayOrPointer(PyObject* pyobject)
 {
     static PyTypeObject* cstgdict_type = nullptr;
@@ -219,6 +220,43 @@ static bool IsCTypesArrayOrPointer(PyObject* pyobject)
         return true;
     return false;
 }
+#else
+// the internals of ctypes have been redone, requiring a more complex checking
+namespace {
+
+typedef struct {
+    PyTypeObject *DictRemover_Type;
+    PyTypeObject *PyCArg_Type;
+    PyTypeObject *PyCField_Type;
+    PyTypeObject *PyCThunk_Type;
+    PyTypeObject *StructParam_Type;
+    PyTypeObject *PyCType_Type;
+    PyTypeObject *PyCStructType_Type;
+    PyTypeObject *UnionType_Type;
+    PyTypeObject *PyCPointerType_Type;
+// ... unused fields omitted ...
+} _cppyy_ctypes_state;
+
+} // unnamed namespace
+
+static bool IsCTypesArrayOrPointer(PyObject* pyobject)
+{
+    static _cppyy_ctypes_state* state = nullptr;
+    if (!state) {
+        PyObject* ctmod = PyImport_AddModule("_ctypes");   // the extension module, not the Python one
+        if (ctmod)
+            state = (_cppyy_ctypes_state*)PyModule_GetState(ctmod);
+    }
+
+    // verify for object types that have a C payload
+    if (state && (PyObject_IsInstance((PyObject*)Py_TYPE(pyobject), (PyObject*)state->PyCType_Type) ||
+                  PyObject_IsInstance((PyObject*)Py_TYPE(pyobject), (PyObject*)state->PyCPointerType_Type))) {
+        return true;
+    }
+
+    return false;
+}
+#endif
 
 
 //- helper to establish life lines -------------------------------------------
