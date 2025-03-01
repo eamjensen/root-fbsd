@@ -84,6 +84,7 @@ set(py_sources
   ROOT/_pythonization/_cppinstance.py
   ROOT/_pythonization/_drawables.py
   ROOT/_pythonization/_generic.py
+  ROOT/_pythonization/_memory_utils.py
   ROOT/_pythonization/_pyz_utils.py
   ROOT/_pythonization/_runtime_error.py
   ROOT/_pythonization/_rvec.py
@@ -97,13 +98,20 @@ set(py_sources
   ROOT/_pythonization/_tcontext.py
   ROOT/_pythonization/_tdirectory.py
   ROOT/_pythonization/_tdirectoryfile.py
+  ROOT/_pythonization/_tefficiency.py
+  ROOT/_pythonization/_tentrylist.py
+  ROOT/_pythonization/_teventlist.py
   ROOT/_pythonization/_tf1.py
   ROOT/_pythonization/_tf2.py
   ROOT/_pythonization/_tf3.py
   ROOT/_pythonization/_tfile.py
+  ROOT/_pythonization/_tfilemerger.py
   ROOT/_pythonization/_tformula.py
   ROOT/_pythonization/_tgraph.py
+  ROOT/_pythonization/_tgraph2d.py
   ROOT/_pythonization/_th1.py
+  ROOT/_pythonization/_th2.py
+  ROOT/_pythonization/_th3.py
   ROOT/_pythonization/_titer.py
   ROOT/_pythonization/_tobject.py
   ROOT/_pythonization/_tobjstring.py
@@ -185,9 +193,9 @@ endif()
 # Compile .py files
 foreach(py_source ${py_sources})
   add_custom_command(TARGET ${libname}
+                      POST_BUILD
                       COMMAND ${Python3_EXECUTABLE} -m py_compile ${localruntimedir}/${py_source}
                       COMMAND ${Python3_EXECUTABLE} -O -m py_compile ${localruntimedir}/${py_source}
-                      DEPENDS ${localruntimedir}/${py_source}
                       COMMENT "Compiling PyROOT source ${py_source} for Python ${Python3_VERSION}")
 endforeach()
 

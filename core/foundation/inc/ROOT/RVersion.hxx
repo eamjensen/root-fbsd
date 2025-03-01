@@ -4,8 +4,8 @@
 /* Update on release: */
 #define ROOT_VERSION_MAJOR 6
 #define ROOT_VERSION_MINOR 34
-#define ROOT_VERSION_PATCH 0
-#define ROOT_RELEASE_DATE "Nov 29 2024"
+#define ROOT_VERSION_PATCH 4
+#define ROOT_RELEASE_DATE "Feb 10 2025"
 
 /* Don't change the lines below. */
 

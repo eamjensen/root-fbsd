@@ -133,7 +133,7 @@ ds.SetBranchAddress('structb', ms)
 from libROOTPythonizations import GetBranchAttr, BranchPyz
 from ._rvec import _array_interface_dtype_map, _get_cpp_type_from_numpy_type
 from . import pythonization
-
+from ROOT._pythonization._memory_utils import _should_give_up_ownership, _constructor_releasing_ownership, _SetDirectory_SetOwnership
 
 # TTree iterator
 def _TTree__iter__(self):
@@ -279,17 +279,18 @@ def _TTree__getattr__(self, key):
         out = cppyy.ll.cast[cast_type](out)
     return out
 
-def _TTree_Constructor(self, *args, **kwargs):
+def _TTree_CloneTree(self, *args, **kwargs):
     """
-    Forward the arguments to the C++ constructor and give up ownership if the
+    Forward the arguments to the C++ function and give up ownership if the
     TTree is attached to a TFile, which is the owner in that case.
     """
     import ROOT
 
-    self._cpp_constructor(*args, **kwargs)
-    tdir = self.GetDirectory()
-    if tdir and type(tdir).__cpp_name__ == "TFile":
-        ROOT.SetOwnership(self, False)
+    out_tree = self._CloneTree(*args, **kwargs)
+    if _should_give_up_ownership(out_tree):
+        ROOT.SetOwnership(out_tree, False)
+
+    return out_tree
 
 @pythonization("TTree")
 def pythonize_ttree(klass, name):
@@ -297,8 +298,13 @@ def pythonize_ttree(klass, name):
     # klass: class to be pythonized
     # name: string containing the name of the class
 
+    # Functions that need to drop the ownership if the current directory is a TFile
+
     klass._cpp_constructor = klass.__init__
-    klass.__init__ = _TTree_Constructor
+    klass.__init__ = _constructor_releasing_ownership
+
+    klass._CloneTree = klass.CloneTree
+    klass.CloneTree = _TTree_CloneTree
 
     # Pythonizations that are common to TTree and its subclasses.
     # To avoid duplicating the same logic in the pythonizors of
@@ -318,6 +324,9 @@ def pythonize_ttree(klass, name):
     # Branch
     klass._OriginalBranch = klass.Branch
     klass.Branch = _Branch
+
+    klass._Original_SetDirectory = klass.SetDirectory
+    klass.SetDirectory = _SetDirectory_SetOwnership
 
 
 @pythonization("TChain")
@@ -341,4 +350,4 @@ def pythonize_tchain(klass):
 
     # The constructor needs to be explicitly pythonized for derived classes.
     klass._cpp_constructor = klass.__init__
-    klass.__init__ = _TTree_Constructor
+    klass.__init__ = _constructor_releasing_ownership

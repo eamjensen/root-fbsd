@@ -1,4 +1,4 @@
-// https://root.cern/js/ v7.8.0
+// https://root.cern/js/ v7.8.1
 (function (global, factory) {
 typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
 typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -8,11 +8,11 @@ typeof define === 'function' && define.amd ? define(['exports'], factory) :
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 /** @summary version id
   * @desc For the JSROOT release the string in format 'major.minor.patch' like '7.0.0' */
-const version_id = '7.8.0',
+const version_id = '7.8.1',
 
 /** @summary version date
   * @desc Release date in format day/month/year like '14/04/2022' */
-version_date = '11/11/2024',
+version_date = '22/01/2025',
 
 /** @summary version id and date
   * @desc Produced by concatenation of {@link version_id} and {@link version_date}
@@ -10102,7 +10102,7 @@ function parseLatex(node, arg, label, curr) {
    },
 
    createSubPos = fscale => {
-      return { lvl: curr.lvl + 1, x: 0, y: 0, fsize: curr.fsize*(fscale || 1), color: curr.color, font: curr.font, parent: curr, painter: curr.painter };
+      return { lvl: curr.lvl + 1, x: 0, y: 0, fsize: curr.fsize*(fscale || 1), color: curr.color, font: curr.font, parent: curr, painter: curr.painter, italic: curr.italic, bold: curr.bold };
    };
 
    while (label) {
@@ -10449,11 +10449,7 @@ function parseLatex(node, arg, label, curr) {
 
          const subpos = createSubPos();
 
-         let value;
-         for (let c = curr; c && (value === undefined && c); c = c.parent)
-            value = c[found.bi];
-
-         subpos[found.bi] = !value;
+         subpos[found.bi] = !subpos[found.bi];
 
          parseLatex(currG(), arg, sublabel, subpos);
 
@@ -70562,7 +70558,7 @@ class TPadPainter extends ObjectPainter {
 
          const mainid = this.selectDom().attr('id');
 
-         if (!this.isBatchMode() && !this.use_openui && !this.brlayout && mainid && isStr(mainid)) {
+         if (!this.isBatchMode() && !this.use_openui && !this.brlayout && mainid && isStr(mainid) && !getHPainter()) {
             this.brlayout = new BrowserLayout(mainid, null, this);
             this.brlayout.create(mainid, true);
             this.setDom(this.brlayout.drawing_divid()); // need to create canvas
@@ -73666,18 +73662,20 @@ class TPavePainter extends ObjectPainter {
             } else if ((opt === 'postitle') || painter.isDummyPos(pave)) {
                const st = gStyle, fp = painter.getFramePainter();
                if (st && fp) {
-                  const midx = st.fTitleX, y2 = st.fTitleY, fsz = st.fTitleFontSize;
-                  let w = st.fTitleW, h = st.fTitleH;
-
-                  if (!h) h = Math.max((y2 - fp.fY2NDC) * 0.7, (fsz < 1) ? 1.1 * fsz : 1.1 * fsz / fp.getFrameWidth());
-                  if (!w) w = fp.fX2NDC - fp.fX1NDC;
+                  const midx = st.fTitleX, y2 = st.fTitleY,
+                        valign = st.fTitleAlign % 10, halign = (st.fTitleAlign - valign) / 10,
+                        title = pave.fLines?.arr[0]?.fTitle;
+                  let w = st.fTitleW, h = st.fTitleH, fsz = st.fTitleFontSize;
+                  if (fsz > 1) fsz = fsz / fp.getFrameWidth();
+                  if (!h) h = Math.max((y2 - fp.fY2NDC) * 0.7, 1.1 * fsz);
+                  if (!w) w = (halign !== 2 && title) ? title.length * fsz * 0.2 : fp.fX2NDC - fp.fX1NDC;
                   if (!Number.isFinite(h) || (h <= 0)) h = 0.06;
                   if (!Number.isFinite(w) || (w <= 0)) w = 0.44;
 
-                  pave.fX1NDC = midx - w/2;
-                  pave.fY1NDC = y2 - h;
-                  pave.fX2NDC = midx + w/2;
-                  pave.fY2NDC = y2;
+                  pave.fX1NDC = halign < 2 ? midx : (halign > 2 ? midx - w : midx - w/2);
+                  pave.fY1NDC = valign === 3 ? y2 - h : (valign === 2 ? y2 - h / 2 : y2);
+                  pave.fX2NDC = pave.fX1NDC + w;
+                  pave.fY2NDC = pave.fY1NDC + h;
                   pave.fInit = 1;
                }
             }
@@ -73890,7 +73888,7 @@ class THistDrawOptions {
       if (d.check('OPTSTAT', true)) this.optstat = d.partAsInt();
       if (d.check('OPTFIT', true)) this.optfit = d.partAsInt();
 
-      if ((this.optstat || this.optstat) && histo?.TestBit(kNoStats))
+      if ((this.optstat || this.optfit) && histo?.TestBit(kNoStats))
          histo?.InvertBit(kNoStats);
 
       if (d.check('NOSTAT')) this.NoStat = true;
@@ -142116,18 +142114,20 @@ async function makePDF(svg, args) {
 
    let doc;
 
+   const orientation = (svg.width < svg.height) ? 'portrait' : 'landscape';
+
    if (args?.as_doc)
       doc = args?.doc;
 
    if (doc) {
       doc.addPage({
-         orientation: 'landscape',
+         orientation,
          unit: 'px',
          format: [svg.width + 10, svg.height + 10]
       });
    } else {
       doc = new jsPDF({
-         orientation: 'landscape',
+         orientation,
          unit: 'px',
          format: [svg.width + 10, svg.height + 10]
       });
@@ -142172,7 +142172,13 @@ async function makePDF(svg, args) {
          node.removeAttribute('dy');
       });
 
-      restore_text.forEach(node => { node.innerHTML = node.$originalHTML; node.setAttribute('font-family', node.$originalFont); });
+      restore_text.forEach(node => {
+         node.innerHTML = node.$originalHTML;
+         if (node.$originalFont)
+            node.setAttribute('font-family', node.$originalFont);
+         else
+            node.removeAttribute('font-family');
+      });
 
       const res = args?.as_buffer ? doc.output('arraybuffer') : doc.output('dataurlstring');
       if (nodejs) {
@@ -142254,6 +142260,7 @@ drawFuncs = { lst: [
    { name: clTCutG, sameas: clTGraph },
    { name: /^RooHist/, sameas: clTGraph },
    { name: /^RooCurve/, sameas: clTGraph },
+   { name: /^RooEllipse/, sameas: clTGraph },
    { name: 'TScatter', icon: 'img_graph', class: () => Promise.resolve().then(function () { return TScatterPainter$1; }).then(h => h.TScatterPainter), opt: ';A' },
    { name: 'RooPlot', icon: 'img_canvas', func: drawRooPlot },
    { name: 'TRatioPlot', icon: 'img_mgraph', class: () => Promise.resolve().then(function () { return TRatioPlotPainter$1; }).then(h => h.TRatioPlotPainter), opt: '' },
@@ -152421,7 +152428,7 @@ class TGraphPolarPainter extends ObjectPainter {
 
       for (let n = 0; n < graph.fNpoints; ++n) {
          const pos = main.translate(graph.fX[n], graph.fY[n]),
-               dist2 = (pos.x-pnt.x)**2 + (pos.y-pnt.y)**2;
+               dist2 = (pos.grx-pnt.x)**2 + (pos.gry-pnt.y)**2;
          if (dist2 < best_dist2) { best_dist2 = dist2; bestindx = n; bestpos = pos; }
       }
 
@@ -152432,8 +152439,8 @@ class TGraphPolarPainter extends ObjectPainter {
 
       const res = {
          name: this.getObject().fName, title: this.getObject().fTitle,
-         x: bestpos.x, y: bestpos.y,
-         color1: this.markeratt?.used ? this.markeratt.color : this.lineatt.color,
+         x: bestpos.grx, y: bestpos.gry,
+         color1: (this.markeratt?.used ? this.markeratt.color : undefined) ?? (this.fillatt?.used ? this.fillatt.color : undefined) ?? this.lineatt?.color,
          exact: Math.sqrt(best_dist2) < 4,
          lines: [this.getObjectHint()],
          binindx: bestindx,
@@ -155449,8 +155456,8 @@ class TGaxisPainter extends TAxisPainter {
       });
    }
 
-   /** @summary Fill TGaxis context */
-   fillContextMenu(menu) {
+   /** @summary Fill TGaxis context menu items */
+   fillContextMenuItems(menu) {
       menu.addTAxisMenu(EAxisBits, this, this.getObject(), '');
    }
 
@@ -159917,7 +159924,7 @@ class RPadPainter extends RObjectPainter {
 
          const mainid = this.selectDom().attr('id');
 
-         if (!this.isBatchMode() && !this.use_openui && !this.brlayout && mainid && isStr(mainid)) {
+         if (!this.isBatchMode() && !this.use_openui && !this.brlayout && mainid && isStr(mainid) && !getHPainter()) {
             this.brlayout = new BrowserLayout(mainid, null, this);
             this.brlayout.create(mainid, true);
             this.setDom(this.brlayout.drawing_divid()); // need to create canvas

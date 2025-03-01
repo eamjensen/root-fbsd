@@ -24,6 +24,7 @@
 
 #include <Byteswap.h>
 #include <TBufferFile.h>
+#include <TDirectory.h>
 #include <TError.h>
 #include <TFile.h>
 #include <TKey.h>
@@ -469,8 +470,8 @@ struct RTFKeyList {
    explicit RTFKeyList(std::uint32_t nKeys) : fNKeys(nKeys) {}
 };
 
-/// A streamed TFile object
-struct RTFFile {
+/// A streamed TDirectory (TFile) object
+struct RTFDirectory {
    RUInt16BE fClassVersion{5};
    RTFDatetime fDateC;
    RTFDatetime fDateM;
@@ -490,13 +491,13 @@ struct RTFFile {
       } fInfoLong;
    };
 
-   RTFFile() : fInfoShort() {}
+   RTFDirectory() : fInfoShort() {}
 
    // In case of a short TFile record (<2G), 3 padding ints are written after the UUID
    std::uint32_t GetSize() const
    {
       if (fClassVersion >= 1000)
-         return sizeof(RTFFile);
+         return sizeof(RTFDirectory);
       return 18 + sizeof(fInfoShort);
    }
 
@@ -601,7 +602,7 @@ namespace Internal {
 /// and the TFile record need to be updated
 struct RTFileControlBlock {
    RTFHeader fHeader;
-   RTFFile fFileRecord;
+   RTFDirectory fFileRecord;
    std::uint64_t fSeekNTuple{0}; // Remember the offset for the keys list
    std::uint64_t fSeekFileRecord{0};
 };
@@ -675,8 +676,50 @@ ROOT::Experimental::Internal::RMiniFileReader::GetNTuple(std::string_view ntuple
    return GetNTupleBare(ntupleName);
 }
 
+/// Searches for a key with the given name and type in the key index of the given directory.
+/// Return 0 if the key was not found.
+std::uint64_t ROOT::Experimental::Internal::RMiniFileReader::SearchInDirectory(std::uint64_t &offsetDir,
+                                                                               std::string_view keyName,
+                                                                               std::string_view typeName)
+{
+   RTFDirectory directory;
+   ReadBuffer(&directory, sizeof(directory), offsetDir);
+
+   RTFKey key;
+   RUInt32BE nKeys;
+   std::uint64_t offset = directory.GetSeekKeys();
+   ReadBuffer(&key, sizeof(key), offset);
+   offset += key.fKeyLen;
+   ReadBuffer(&nKeys, sizeof(nKeys), offset);
+   offset += sizeof(nKeys);
+
+   for (unsigned int i = 0; i < nKeys; ++i) {
+      ReadBuffer(&key, sizeof(key), offset);
+      auto offsetNextKey = offset + key.fKeyLen;
+
+      offset += key.GetHeaderSize();
+      RTFString name;
+      ReadBuffer(&name, 1, offset);
+      ReadBuffer(&name, name.GetSize(), offset);
+      if (std::string_view(name.fData, name.fLName) != typeName) {
+         offset = offsetNextKey;
+         continue;
+      }
+      offset += name.GetSize();
+      ReadBuffer(&name, 1, offset);
+      ReadBuffer(&name, name.GetSize(), offset);
+      if (std::string_view(name.fData, name.fLName) == keyName) {
+         return key.GetSeekKey();
+      }
+      offset = offsetNextKey;
+   }
+
+   // Not found
+   return 0;
+}
+
 ROOT::Experimental::RResult<ROOT::RNTuple>
-ROOT::Experimental::Internal::RMiniFileReader::GetNTupleProper(std::string_view ntupleName)
+ROOT::Experimental::Internal::RMiniFileReader::GetNTupleProper(std::string_view ntuplePath)
 {
    RTFHeader fileHeader;
    ReadBuffer(&fileHeader, sizeof(fileHeader), 0);
@@ -686,45 +729,37 @@ ROOT::Experimental::Internal::RMiniFileReader::GetNTupleProper(std::string_view 
    ReadBuffer(&key, sizeof(key), fileHeader.fBEGIN);
    // Skip over the entire key length, including the class name, object name, and title stored in it.
    std::uint64_t offset = fileHeader.fBEGIN + key.fKeyLen;
-   // Skip over the name and title of the TNamed preceding the TFile entry.
+   // Skip over the name and title of the TNamed preceding the TFile (root TDirectory) entry.
    ReadBuffer(&name, 1, offset);
    offset += name.GetSize();
    ReadBuffer(&name, 1, offset);
    offset += name.GetSize();
-   RTFFile file;
-   ReadBuffer(&file, sizeof(file), offset);
 
-   RUInt32BE nKeys;
-   offset = file.GetSeekKeys();
-   ReadBuffer(&key, sizeof(key), offset);
-   offset += key.fKeyLen;
-   ReadBuffer(&nKeys, sizeof(nKeys), offset);
-   offset += sizeof(nKeys);
-   bool found = false;
-   for (unsigned int i = 0; i < nKeys; ++i) {
+   // split ntupleName by '/' character to open datasets in subdirectories.
+   std::string ntuplePathTail(ntuplePath);
+   if (!ntuplePathTail.empty() && ntuplePathTail[0] == '/')
+      ntuplePathTail = ntuplePathTail.substr(1);
+   auto pos = std::string::npos;
+   while ((pos = ntuplePathTail.find('/')) != std::string::npos) {
+      auto directoryName = ntuplePathTail.substr(0, pos);
+      ntuplePathTail.erase(0, pos + 1);
+
+      offset = SearchInDirectory(offset, directoryName, "TDirectory");
+      if (offset == 0) {
+         return R__FAIL("no directory named '" + std::string(directoryName) + "' in file '" + fRawFile->GetUrl() + "'");
+      }
       ReadBuffer(&key, sizeof(key), offset);
-      auto offsetNextKey = offset + key.fKeyLen;
-
-      offset += key.GetHeaderSize();
-      ReadBuffer(&name, 1, offset);
-      ReadBuffer(&name, name.GetSize(), offset);
-      if (std::string_view(name.fData, name.fLName) != kNTupleClassName) {
-         offset = offsetNextKey;
-         continue;
-      }
-      offset += name.GetSize();
-      ReadBuffer(&name, 1, offset);
-      ReadBuffer(&name, name.GetSize(), offset);
-      if (std::string_view(name.fData, name.fLName) == ntupleName) {
-         found = true;
-         break;
-      }
-      offset = offsetNextKey;
+      offset = key.GetSeekKey() + key.fKeyLen;
    }
-   if (!found) {
+   // no more '/' delimiter in ntuplePath
+   auto ntupleName = ntuplePathTail;
+
+   offset = SearchInDirectory(offset, ntupleName, kNTupleClassName);
+   if (offset == 0) {
       return R__FAIL("no RNTuple named '" + std::string(ntupleName) + "' in file '" + fRawFile->GetUrl() + "'");
    }
 
+   ReadBuffer(&key, sizeof(key), offset);
    offset = key.GetSeekKey() + key.fKeyLen;
 
    // size of a RTFNTuple version 2 (min supported version); future anchor versions can grow.
@@ -1002,9 +1037,8 @@ std::uint64_t ROOT::Experimental::Internal::RNTupleFileWriter::RFileSimple::Writ
 void ROOT::Experimental::Internal::RNTupleFileWriter::RFileProper::Write(const void *buffer, size_t nbytes,
                                                                          std::int64_t offset)
 {
-   R__ASSERT(fFile);
-   fFile->Seek(offset);
-   bool rv = fFile->WriteBuffer((char *)(buffer), nbytes);
+   fDirectory->GetFile()->Seek(offset);
+   bool rv = fDirectory->GetFile()->WriteBuffer((char *)(buffer), nbytes);
    if (rv)
       throw RException(R__FAIL("WriteBuffer failed."));
 }
@@ -1013,7 +1047,7 @@ std::uint64_t
 ROOT::Experimental::Internal::RNTupleFileWriter::RFileProper::WriteKey(const void *buffer, size_t nbytes, size_t len)
 {
    std::uint64_t offsetKey;
-   RKeyBlob keyBlob(fFile);
+   RKeyBlob keyBlob(fDirectory->GetFile());
    // Since it is unknown beforehand if offsetKey is beyond the 2GB limit or not,
    // RKeyBlob will always reserve space for a big key (version >= 1000)
    keyBlob.Reserve(nbytes, &offsetKey);
@@ -1106,11 +1140,16 @@ ROOT::Experimental::Internal::RNTupleFileWriter::Recreate(std::string_view ntupl
 }
 
 std::unique_ptr<ROOT::Experimental::Internal::RNTupleFileWriter>
-ROOT::Experimental::Internal::RNTupleFileWriter::Append(std::string_view ntupleName, TFile &file,
+ROOT::Experimental::Internal::RNTupleFileWriter::Append(std::string_view ntupleName, TDirectory &fileOrDirectory,
                                                         std::uint64_t maxKeySize)
 {
+   TFile *file = fileOrDirectory.GetFile();
+   if (!file)
+      throw RException(R__FAIL("invalid attempt to add an RNTuple to a directory that is not backed by a file"));
+   assert(file->IsBinary());
+
    auto writer = std::unique_ptr<RNTupleFileWriter>(new RNTupleFileWriter(ntupleName, maxKeySize));
-   writer->fFileProper.fFile = &file;
+   writer->fFileProper.fDirectory = &fileOrDirectory;
    return writer;
 }
 
@@ -1124,15 +1163,15 @@ void ROOT::Experimental::Internal::RNTupleFileWriter::Commit()
 {
    if (fFileProper) {
       // Easy case, the ROOT file header and the RNTuple streaming is taken care of by TFile
-      fFileProper.fFile->WriteObject(&fNTupleAnchor, fNTupleName.c_str());
+      fFileProper.fDirectory->WriteObject(&fNTupleAnchor, fNTupleName.c_str());
 
       // Make sure the streamer info records used in the RNTuple are written to the file
       TBufferFile buf(TBuffer::kWrite);
-      buf.SetParent(fFileProper.fFile);
+      buf.SetParent(fFileProper.fDirectory->GetFile());
       for (auto [_, info] : fStreamerInfoMap)
          buf.TagStreamerInfo(info);
 
-      fFileProper.fFile->Write();
+      fFileProper.fDirectory->GetFile()->Write();
       return;
    }
 
@@ -1428,7 +1467,7 @@ void ROOT::Experimental::Internal::RNTupleFileWriter::WriteTFileSkeleton(int def
 
    // First record of the file: the TFile object at offset 100
    RTFKey keyRoot(100, 0, strTFile, strFileName, strEmpty,
-                  sizeof(RTFFile) + strFileName.GetSize() + strEmpty.GetSize() + uuid.GetSize());
+                  sizeof(RTFDirectory) + strFileName.GetSize() + strEmpty.GetSize() + uuid.GetSize());
    std::uint32_t nbytesName = keyRoot.fKeyLen + strFileName.GetSize() + 1;
    fFileSimple.fControlBlock->fFileRecord.fNBytesName = nbytesName;
    fFileSimple.fControlBlock->fHeader.SetNbytesName(nbytesName);
