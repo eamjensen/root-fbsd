@@ -1,4 +1,4 @@
-% ROOT Version 6.34 Release Notes
+gi% ROOT Version 6.34 Release Notes
 % 2024-11
 <a name="TopOfPage"></a>
 
@@ -665,7 +665,11 @@ This release includes a few minor fixes in RDataFrame and RooFit, besides the it
 * [[#17222](https://github.com/root-project/root/issues/17222)] - Regression in Python ownership for histograms within subdirectories with ROOT 6.34.00
 - [[#17223](https://github.com/root-project/root/issues/17223)] - TFileMerger leaves files open resulting in corrupt metadata
 
-## HEAD of the v6-34-00-patches branch
+## Release 6.34.04
+
+Published on February 10, 2025
+
+### Items addressed in this release
 
 This branch includes a few minor fixes in RDataFrame, as well as a mechanism was added to specify binding options when opening sockets with TSocketServer. 
 Moreover, the items listed below were addressed:
@@ -684,3 +688,19 @@ Moreover, the items listed below were addressed:
 * [[#17444](https://github.com/root-project/root/issues/17444)] - ROOT doesn't compile with gcc-15
 * [[#17472](https://github.com/root-project/root/issues/17472)] - RooEllipse not drawn in notebooks with `%jsroot on`
 
+## Release 6.34.06
+
+Published on March 27, 2025
+
+### Items addressed in this release
+
+This branch includes minor bugfixes and changes in the code to adapt it to the evolving ROOT's testing infrastructure. Notable examples are the reduced dependency on the webserver of ROOT's tests or changes required by ATLAS FastFrames framework. JSRoot has been updated to version [[7.8.2](https://github.com/root-project/jsroot/releases/tag/7.8.2)].
+
+The following items were addressed:
+
+* [[#10096](https://github.com/root-project/root/issues/10096)] - heap-use-after-free in ~TTreeReader
+* [[#17456](https://github.com/root-project/root/issues/17456)] - Test failures when compiling ROOT with gcc 15
+* [[#17753](https://github.com/root-project/root/issues/17753)] - Race condition in TClass::fStreamerImpl value for emulated classes.
+* [[#17992](https://github.com/root-project/root/issues/17992)] - Spurrious auto parsing when looking up a TClass
+
+## HEAD of the v6-34-00-patches branch

@@ -1,4 +1,4 @@
-// https://root.cern/js/ v7.8.1
+// https://root.cern/js/ v7.8.2
 (function (global, factory) {
 typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports) :
 typeof define === 'function' && define.amd ? define(['exports'], factory) :
@@ -8,11 +8,11 @@ typeof define === 'function' && define.amd ? define(['exports'], factory) :
 var _documentCurrentScript = typeof document !== 'undefined' ? document.currentScript : null;
 /** @summary version id
   * @desc For the JSROOT release the string in format 'major.minor.patch' like '7.0.0' */
-const version_id = '7.8.1',
+const version_id = '7.8.2',
 
 /** @summary version date
   * @desc Release date in format day/month/year like '14/04/2022' */
-version_date = '22/01/2025',
+version_date = '26/03/2025',
 
 /** @summary version id and date
   * @desc Produced by concatenation of {@link version_id} and {@link version_date}
@@ -106,7 +106,7 @@ if ((typeof document !== 'undefined') && (typeof window !== 'undefined') && (typ
       browser.isSafari = Object.prototype.toString.call(window.HTMLElement).indexOf('Constructor') > 0;
       browser.isChrome = !!window.chrome;
       browser.isChromeHeadless = navigator.userAgent.indexOf('HeadlessChrome') >= 0;
-      browser.chromeVersion = (browser.isChrome || browser.isChromeHeadless) ? parseInt(navigator.userAgent.match(/Chrom(?:e|ium)\/([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)/)[1]) : 0;
+      browser.chromeVersion = (browser.isChrome || browser.isChromeHeadless) ? (navigator.userAgent.indexOf('Chrom') > 0 ? parseInt(navigator.userAgent.match(/Chrom(?:e|ium)\/([0-9]+)\.([0-9]+)\.([0-9]+)\.([0-9]+)/)[1]) : 134) : 0;
       browser.isWin = navigator.userAgent.indexOf('Windows') >= 0;
    }
    browser.android = /android/i.test(navigator.userAgent);
@@ -302,7 +302,15 @@ settings = {
      * @desc Some http server has limitations for number of bytes ranges therefore let change maximal number via setting
      * @default 200 */
    MaxRanges: 200,
-  /** @summary Configure xhr.withCredentials = true when submitting http requests from JSROOT */
+   /** @summary File read timeout in ms
+    * @desc Configures timeout for each http operation for reading ROOT files
+    * @default 0 */
+   FilesTimeout: 0,
+   /** @summary Default remap object for files loading
+       * @desc Allows to retry files reading if original URL fails
+       * @private */
+   FilesRemap: { 'https://root.cern/': 'https://root-eos.web.cern.ch/' },
+   /** @summary Configure xhr.withCredentials = true when submitting http requests from JSROOT */
    WithCredentials: false,
    /** @summary Skip streamer infos from the GUI */
    SkipStreamerInfos: false,
@@ -1579,7 +1587,7 @@ function getMethods(typename, obj) {
       };
    }
 
-   if ((typename.indexOf(clTF1) === 0) || (typename === clTF2)) {
+   if ((typename.indexOf(clTF1) === 0) || (typename === clTF2) || (typename === clTF3)) {
       m.addFormula = function(obj) {
          if (!obj) return;
          if (this.formulas === undefined) this.formulas = [];
@@ -9325,7 +9333,7 @@ async function loadFontFile(fname) {
 
    if (entry?.promises !== undefined) {
       return new Promise(resolveFunc => {
-         cfg.promises.push(resolveFunc);
+         entry.promises.push(resolveFunc);
       });
    }
 
@@ -10324,7 +10332,8 @@ function parseLatex(node, arg, label, curr) {
          }
 
          if (pos_up) {
-            if (!pos_low) yup = Math.min(yup, curr.rect.last_y1);
+            if (!pos_low && curr.rect)
+               yup = Math.min(yup, curr.rect.last_y1);
             positionGNode(pos_up, x+dx, yup - pos_up.rect.y1 - curr.fsize*0.1);
             w1 = pos_up.rect.width;
          }
@@ -69361,8 +69370,10 @@ class TPadPainter extends ObjectPainter {
       this.createAttFill({ attr: this.pad });
 
       if ((rect.width <= lmt) || (rect.height <= lmt)) {
-         svg.style('display', 'none');
-         console.warn(`Hide canvas while geometry too small w=${rect.width} h=${rect.height}`);
+         if (this.snapid === undefined) {
+            svg.style('display', 'none');
+            console.warn(`Hide canvas while geometry too small w=${rect.width} h=${rect.height}`);
+         }
          if (this._pad_width && this._pad_height) {
             // use last valid dimensions
             rect.width = this._pad_width;
@@ -70558,7 +70569,7 @@ class TPadPainter extends ObjectPainter {
 
          const mainid = this.selectDom().attr('id');
 
-         if (!this.isBatchMode() && !this.use_openui && !this.brlayout && mainid && isStr(mainid) && !getHPainter()) {
+         if (!this.isBatchMode() && this.online_canvas && !this.use_openui && !this.brlayout && mainid && isStr(mainid) && !getHPainter()) {
             this.brlayout = new BrowserLayout(mainid, null, this);
             this.brlayout.create(mainid, true);
             this.setDom(this.brlayout.drawing_divid()); // need to create canvas
@@ -85231,16 +85242,16 @@ function createNormal(axis_name, pos, size) {
    return new Geometry(node);
 }
 
-const cfg$1 = {
+const cfg = {
    GradPerSegm: 6,       // grad per segment in cylinder/spherical symmetry shapes
    CompressComp: true    // use faces compression in composite shapes
 };
 
 function geoCfg(name, value) {
    if (value === undefined)
-      return cfg$1[name];
+      return cfg[name];
 
-   cfg$1[name] = value;
+   cfg[name] = value;
 }
 
 const kindGeo = 0,    // TGeoNode / TGeoShape
@@ -86127,7 +86138,7 @@ function createTubeBuffer(shape, faces_limit) {
       thetaLength = shape.fPhi2 - shape.fPhi1;
    }
 
-   const radiusSegments = Math.max(4, Math.round(thetaLength/cfg$1.GradPerSegm));
+   const radiusSegments = Math.max(4, Math.round(thetaLength/cfg.GradPerSegm));
 
    // external surface
    let numfaces = radiusSegments * (((outerR[0] <= 0) || (outerR[1] <= 0)) ? 1 : 2);
@@ -86249,7 +86260,7 @@ function createTubeBuffer(shape, faces_limit) {
 /** @summary Creates eltu geometry
   * @private */
 function createEltuBuffer(shape, faces_limit) {
-   const radiusSegments = Math.max(4, Math.round(360/cfg$1.GradPerSegm));
+   const radiusSegments = Math.max(4, Math.round(360/cfg.GradPerSegm));
 
    if (faces_limit < 0) return radiusSegments*4;
 
@@ -86300,8 +86311,8 @@ function createEltuBuffer(shape, faces_limit) {
   * @private */
 function createTorusBuffer(shape, faces_limit) {
    const radius = shape.fR;
-   let radialSegments = Math.max(6, Math.round(360/cfg$1.GradPerSegm)),
-       tubularSegments = Math.max(8, Math.round(shape.fDphi/cfg$1.GradPerSegm)),
+   let radialSegments = Math.max(6, Math.round(360/cfg.GradPerSegm)),
+       tubularSegments = Math.max(8, Math.round(shape.fDphi/cfg.GradPerSegm)),
        numfaces = (shape.fRmin > 0 ? 4 : 2) * radialSegments * (tubularSegments + (shape.fDphi !== 360 ? 1 : 0));
 
    if (faces_limit < 0) return numfaces;
@@ -86399,7 +86410,7 @@ function createPolygonBuffer(shape, faces_limit) {
       radiusSegments = shape.fNedges;
       factor = 1.0 / Math.cos(Math.PI/180 * thetaLength / radiusSegments / 2);
    } else {
-      radiusSegments = Math.max(5, Math.round(thetaLength/cfg$1.GradPerSegm));
+      radiusSegments = Math.max(5, Math.round(thetaLength/cfg.GradPerSegm));
       factor = 1;
    }
 
@@ -86626,7 +86637,7 @@ function createXtruBuffer(shape, faces_limit) {
 /** @summary Creates para geometry
   * @private */
 function createParaboloidBuffer(shape, faces_limit) {
-   let radiusSegments = Math.max(4, Math.round(360/cfg$1.GradPerSegm)),
+   let radiusSegments = Math.max(4, Math.round(360/cfg.GradPerSegm)),
        heightSegments = 30;
 
    if (faces_limit > 0) {
@@ -86721,7 +86732,7 @@ function createHypeBuffer(shape, faces_limit) {
    if ((shape.fTin === 0) && (shape.fTout === 0))
       return createTubeBuffer(shape, faces_limit);
 
-   let radiusSegments = Math.max(4, Math.round(360/cfg$1.GradPerSegm)),
+   let radiusSegments = Math.max(4, Math.round(360/cfg.GradPerSegm)),
        heightSegments = 30,
        numfaces = radiusSegments * (heightSegments + 1) * ((shape.fRmin > 0) ? 4 : 2);
 
@@ -87094,7 +87105,7 @@ function createComposite(shape, faces_limit) {
       return geom1;
    }
 
-   let bsp1 = new Geometry(geom1, matrix1, cfg$1.CompressComp ? 0 : undefined);
+   let bsp1 = new Geometry(geom1, matrix1, cfg.CompressComp ? 0 : undefined);
 
    const bsp2 = new Geometry(geom2, matrix2, bsp1.maxid);
 
@@ -98253,6 +98264,35 @@ function getTypeId(typname, norecursion) {
    return -1;
 }
 
+/** @summary Create streamer info for pair object
+  * @private */
+function createPairStreamer(typename, file) {
+   let si = file.findStreamerInfo(typename);
+   if (si)
+      return si;
+   let p1 = typename.indexOf('<');
+   const p2 = typename.lastIndexOf('>');
+   function getNextName() {
+      let res = '', p = p1 + 1, cnt = 0;
+      while ((p < p2) && (cnt >= 0)) {
+         switch (typename[p]) {
+            case '<': cnt++; break;
+            case ',': if (cnt === 0) cnt--; break;
+            case '>': cnt--; break;
+         }
+         if (cnt >= 0) res += typename[p];
+         p++;
+      }
+      p1 = p - 1;
+      return res.trim();
+   }
+   si = { _typename: 'TStreamerInfo', fClassVersion: 0, fName: typename, fElements: create$1(clTList) };
+   si.fElements.Add(createStreamerElement('first', getNextName(), file));
+   si.fElements.Add(createStreamerElement('second', getNextName(), file));
+   file.fStreamerInfos.arr.push(si);
+   return si;
+}
+
 /** @summary create element of the streamer
   * @private  */
 function createStreamerElement(name, typename, file) {
@@ -98271,7 +98311,8 @@ function createStreamerElement(name, typename, file) {
       typename = elem.fTypeName = BasicTypeNames[elem.fType] || 'int';
    }
 
-   if (elem.fType > 0) return elem; // basic type
+   if (elem.fType > 0)
+      return elem; // basic type
 
    // check if there are STL containers
    const pos = typename.indexOf('<');
@@ -98292,6 +98333,9 @@ function createStreamerElement(name, typename, file) {
       return elem;
    }
 
+   if ((pos > 0) && (typename.slice(0, pos) === 'pair') && file)
+      createPairStreamer(typename, file);
+
    const isptr = (typename.lastIndexOf('*') === typename.length - 1);
 
    if (isptr)
@@ -98311,33 +98355,8 @@ function createStreamerElement(name, typename, file) {
 /** @summary Function creates streamer for std::pair object
   * @private */
 function getPairStreamer(si, typname, file) {
-   if (!si) {
-      if (typname.indexOf('pair') !== 0) return null;
-
-      si = file.findStreamerInfo(typname);
-
-      if (!si) {
-         let p1 = typname.indexOf('<');
-         const p2 = typname.lastIndexOf('>');
-         function GetNextName() {
-            let res = '', p = p1 + 1, cnt = 0;
-            while ((p < p2) && (cnt >= 0)) {
-               switch (typname[p]) {
-                  case '<': cnt++; break;
-                  case ',': if (cnt === 0) cnt--; break;
-                  case '>': cnt--; break;
-               }
-               if (cnt >= 0) res += typname[p];
-               p++;
-            }
-            p1 = p - 1;
-            return res.trim();
-         }
-         si = { _typename: 'TStreamerInfo', fVersion: 1, fName: typname, fElements: create$1(clTList) };
-         si.fElements.Add(createStreamerElement('first', GetNextName(), file));
-         si.fElements.Add(createStreamerElement('second', GetNextName(), file));
-      }
-   }
+   if (!si)
+      si = createPairStreamer(typname, file);
 
    const streamer = file.getStreamer(typname, null, si);
    if (!streamer) return null;
@@ -98741,7 +98760,7 @@ function createMemberStreamer(element, file) {
                member.readelem = readVectorElement;
 
                if (!member.isptr && (member.arrkind < 0)) {
-                  const subelem = createStreamerElement('temp', member.conttype);
+                  const subelem = createStreamerElement('temp', member.conttype, file);
                   if (subelem.fType === kStreamer) {
                      subelem.$fictional = true;
                      member.submember = createMemberStreamer(subelem, file);
@@ -100235,6 +100254,7 @@ class TFile {
       this.fStreamers = 0;
       this.fStreamerInfos = null;
       this.fFileName = '';
+      this.fTimeout = settings.FilesTimeout ?? 0;
       this.fStreamers = [];
       this.fBasicTypes = {}; // custom basic types, in most case enumerations
 
@@ -100260,8 +100280,33 @@ class TFile {
          this.fAcceptRanges = false;
       }
 
+      if (isNodeJs())
+         this.fUseStampPar = false;
+
       const pos = Math.max(this.fURL.lastIndexOf('/'), this.fURL.lastIndexOf('\\'));
       this.fFileName = pos >= 0 ? this.fURL.slice(pos + 1) : this.fURL;
+   }
+
+   /** @summary Set timeout for File instance
+     * @desc Timeout used when submitting http requests to the server */
+   setTimeout(v) {
+      this.fTimeout = v;
+   }
+
+   /** @summary Assign remap for web servers
+    * @desc Allows to specify fallback server if main server fails
+    * @param {Object} remap - looks like { 'https://original.server/': 'https://fallback.server/' } */
+   assignRemap(remap) {
+      if (!remap && !isObject(remap))
+         return;
+
+      for (const key in remap) {
+         if (this.fURL.indexOf(key) === 0) {
+            this.fURL2 = remap[key] + this.fURL.slice(key.length);
+            if (!this.fTimeout)
+               this.fTimeout = 10000;
+         }
+      }
    }
 
    /** @summary Assign BufferArray with file contentOpen file
@@ -100291,15 +100336,23 @@ class TFile {
             blobs = [], // array of requested segments
             promise = new Promise((resolve, reject) => { resolveFunc = resolve; rejectFunc = reject; });
 
-      let fileurl = file.fURL,
-          first = 0, last = 0,
+      let fileurl, first = 0, last = 0,
           // eslint-disable-next-line prefer-const
           read_callback, first_req,
           first_block_retry = false;
 
-      if (isStr(filename) && filename) {
-         const pos = fileurl.lastIndexOf('/');
-         fileurl = (pos < 0) ? filename : fileurl.slice(0, pos + 1) + filename;
+      function setFileUrl(use_second) {
+         if (use_second) {
+            console.log('Failure - try to repait with URL2', file.fURL2);
+            file.fURL = file.fURL2;
+            delete file.fURL2;
+         }
+
+         fileurl = file.fURL;
+         if (isStr(filename) && filename) {
+            const pos = fileurl.lastIndexOf('/');
+            fileurl = (pos < 0) ? filename : fileurl.slice(0, pos + 1) + filename;
+         }
       }
 
       function send_new_request(increment) {
@@ -100330,6 +100383,9 @@ class TFile {
                xhr.setRequestHeader('Range', ranges);
                xhr.expected_size = Math.max(Math.round(1.1 * totalsz), totalsz + 200); // 200 if offset for the potential gzip
             }
+
+            if (file.fTimeout)
+               xhr.timeout = file.fTimeout;
 
             if (isFunc(progress_callback) && isFunc(xhr.addEventListener)) {
                let sum1 = 0, sum2 = 0, sum_total = 0;
@@ -100370,6 +100426,10 @@ class TFile {
                file.fUseStampPar = false;
                return send_new_request();
             }
+            if (file.fURL2) {
+               setFileUrl(true);
+               return send_new_request();
+            }
             if (file.fAcceptRanges) {
                file.fAcceptRanges = false;
                first_block_retry = true;
@@ -100404,9 +100464,13 @@ class TFile {
          }
 
          if (!res) {
+            if (file.fURL2) {
+               setFileUrl(true);
+               return send_new_request();
+            }
+
             if ((first === 0) && (last > 2) && (file.fMaxRanges > 1)) {
                // server return no response with multi request - try to decrease ranges count or fail
-
                if (last / 2 > 200)
                   file.fMaxRanges = 200;
                else if (last / 2 > 50)
@@ -100422,7 +100486,7 @@ class TFile {
                return send_new_request();
             }
 
-            return rejectFunc(Error('Fail to read with several ranges'));
+            return rejectFunc(Error(`Fail to read with ${last/2} ranges`));
          }
 
          // if only single segment requested, return result as is
@@ -100567,6 +100631,8 @@ class TFile {
 
          send_new_request(true);
       };
+
+      setFileUrl();
 
       return send_new_request(true).then(() => promise);
    }
@@ -100893,7 +100959,8 @@ class TFile {
      * @param {number} [checksum] - streamer info checksum, have to match when specified
      * @private */
    findStreamerInfo(clname, clversion, checksum) {
-      if (!this.fStreamerInfos) return null;
+      if (!this.fStreamerInfos)
+         return null;
 
       const arr = this.fStreamerInfos.arr, len = arr.length;
 
@@ -100901,20 +100968,25 @@ class TFile {
          let cache = this.fStreamerInfos.cache;
          if (!cache) cache = this.fStreamerInfos.cache = {};
          let si = cache[checksum];
-         if (si !== undefined) return si;
+         if (si && (!clname || (si.fName === clname)))
+            return si;
 
          for (let i = 0; i < len; ++i) {
             si = arr[i];
             if (si.fCheckSum === checksum) {
                cache[checksum] = si;
-               return si;
+               if (!clname || (si.fName === clname))
+                  return si;
             }
          }
          cache[checksum] = null; // checksum did not found, do not try again
-      } else {
+      }
+
+      if (clname) {
          for (let i = 0; i < len; ++i) {
             const si = arr[i];
-            if ((si.fName === clname) && ((si.fClassVersion === clversion) || (clversion === undefined))) return si;
+            if ((si.fName === clname) && ((si.fClassVersion === clversion) || (clversion === undefined)))
+               return si;
          }
       }
 
@@ -100956,7 +101028,8 @@ class TFile {
       }
 
       // check element in streamer infos, one can have special cases
-      if (!s_i) s_i = this.findStreamerInfo(clname, ver.val, ver.checksum);
+      if (!s_i)
+         s_i = this.findStreamerInfo(clname, ver.val, ver.checksum);
 
       if (!s_i) {
          delete this.fStreamers[fullname];
@@ -101110,17 +101183,13 @@ function readMapElement(buf) {
 
    if (this.member_wise) {
       // when member-wise streaming is used, version is written
-      const ver = this.stl_version;
+      const si = buf.fFile.findStreamerInfo(this.pairtype, this.stl_version.val, this.stl_version.checksum);
 
-      if (this.si) {
-         const si = buf.fFile.findStreamerInfo(this.pairtype, ver.val, ver.checksum);
-
-         if (this.si !== si) {
-            streamer = getPairStreamer(si, this.pairtype, buf.fFile);
-            if (!streamer || streamer.length !== 2) {
-               console.log(`Fail to produce streamer for ${this.pairtype}`);
-               return null;
-            }
+      if (si && (this.si !== si)) {
+         streamer = getPairStreamer(si, this.pairtype, buf.fFile);
+         if (streamer?.length !== 2) {
+            console.log(`Fail to produce streamer for ${this.pairtype}`);
+            return null;
          }
       }
    }
@@ -101392,8 +101461,10 @@ function openFile(arg) {
    if (!file && isObject(arg) && arg.size && arg.name)
       file = new TLocalFile(arg);
 
-   if (!file)
+   if (!file) {
       file = new TFile(arg);
+      file.assignRemap(settings.FilesRemap);
+   }
 
    return file._open();
 }
@@ -153144,7 +153215,8 @@ class TScatterPainter extends TGraphPainter$1 {
   /** @summary Draw axis histogram
     * @private */
    async drawAxisHisto() {
-      const histo = this.createHistogram();
+      const need_histo = !this.getHistogram(),
+            histo = this.createHistogram(need_histo, need_histo);
       return TH2Painter$2.draw(this.getDrawDom(), histo, this.options.Axis + ';IGNORE_PALETTE');
    }
 
@@ -159177,9 +159249,19 @@ class RPadPainter extends RObjectPainter {
       this.createAttFill({ pattern: 1001, color: 0 });
 
       if ((rect.width <= lmt) || (rect.height <= lmt)) {
-         svg.style('display', 'none');
-         console.warn(`Hide canvas while geometry too small w=${rect.width} h=${rect.height}`);
-         rect.width = 200; rect.height = 100; // just to complete drawing
+         if (this.snapid === undefined) {
+            svg.style('display', 'none');
+            console.warn(`Hide canvas while geometry too small w=${rect.width} h=${rect.height}`);
+         }
+         if (this._pad_width && this._pad_height) {
+            // use last valid dimensions
+            rect.width = this._pad_width;
+            rect.height = this._pad_height;
+         } else {
+            // just to complete drawing.
+            rect.width = 800;
+            rect.height = 600;
+         }
       } else
          svg.style('display', null);
 
@@ -159924,7 +160006,7 @@ class RPadPainter extends RObjectPainter {
 
          const mainid = this.selectDom().attr('id');
 
-         if (!this.isBatchMode() && !this.use_openui && !this.brlayout && mainid && isStr(mainid) && !getHPainter()) {
+         if (!this.isBatchMode() && this.online_canvas && !this.use_openui && !this.brlayout && mainid && isStr(mainid) && !getHPainter()) {
             this.brlayout = new BrowserLayout(mainid, null, this);
             this.brlayout.create(mainid, true);
             this.setDom(this.brlayout.drawing_divid()); // need to create canvas
