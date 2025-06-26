@@ -9,7 +9,8 @@ import { FontHandler, kArial } from '../base/FontHandler.mjs';
 import { kAxisLabels } from '../base/ObjectPainter.mjs';
 
 
-const kToFront = '__front__', sDfltName = 'root_ctx_menu', sDfltDlg = '_dialog',
+const kToFront = '__front__', kNoReorder = '__no_reorder',
+      sDfltName = 'root_ctx_menu', sDfltDlg = '_dialog',
       sSub = 'sub:', sEndsub = 'endsub:', sSeparator = 'separator', sHeader = 'header:';
 
 /**
@@ -200,7 +201,7 @@ class JSRootMenu {
    addColorMenu(name, value, set_func, fill_kind) {
       if (value === undefined) return;
       const useid = !isStr(value);
-      this.sub('' + name, () => {
+      this.sub(name, () => {
          this.input('Enter color ' + (useid ? '(only id number)' : '(name or id)'), value, useid ? 'int' : 'text', useid ? 0 : undefined, useid ? 9999 : undefined).then(col => {
             const id = parseInt(col);
             if (Number.isInteger(id) && getColor(id))
@@ -231,7 +232,8 @@ class JSRootMenu {
          }
 
          this.add('endcolumn:');
-         if (!this.native()) break;
+         if (!this.native())
+            break;
       }
 
       this.endsub();
@@ -244,7 +246,8 @@ class JSRootMenu {
 
       let values = [], miss_current = false;
       if (isObject(step)) {
-         values = step; step = 1;
+         values = step;
+         step = 1;
       } else {
          for (let sz = min; sz <= max; sz += step)
             values.push(sz);
@@ -264,7 +267,7 @@ class JSRootMenu {
          values = values.sort((a, b) => a > b);
       }
 
-      this.sub('' + name, () => this.input('Enter value of ' + name, conv(size_value, true), (step >= 1) ? 'int' : 'float').then(set_func), title);
+      this.sub(name, () => this.input('Enter value of ' + name, conv(size_value, true), (step >= 1) ? 'int' : 'float').then(set_func), title);
       values.forEach(v => this.addchk(match(v), conv(v), v, res => set_func((step >= 1) ? Number.parseInt(res) : Number.parseFloat(res))));
       this.endsub();
    }
@@ -284,7 +287,6 @@ class JSRootMenu {
       this.sub('Palette', () => this.input('Enter palette code [1..113]', curr, 'int', 1, 113).then(set_func));
 
       this.add('column:');
-
       add(57, 'Bird', 'Default color palette', (curr > 113));
       add(55, 'Rainbow');
       add(51, 'Deep Sea');
@@ -298,14 +300,12 @@ class JSRootMenu {
       add(59, '', 'Green Red Violet');
       add(60, '', 'Blue Red Yellow');
       add(61, 'Ocean');
-
       this.add('endcolumn:');
 
       if (!this.native())
          return this.endsub();
 
       this.add('column:');
-
       add(62, '', 'Color Printable On Grey');
       add(63, 'Alpine');
       add(64, 'Aquamarine');
@@ -319,10 +319,9 @@ class JSRootMenu {
       add(72, 'Brown Cyan');
       add(73, 'CMYK');
       add(74, 'Candy');
-
       this.add('endcolumn:');
-      this.add('column:');
 
+      this.add('column:');
       add(75, 'Cherry');
       add(76, 'Coffee');
       add(77, '', 'Dark Rain Bow');
@@ -336,10 +335,9 @@ class JSRootMenu {
       add(85, 'Island');
       add(86, 'Lake');
       add(87, '', 'Light Temperature');
-
       this.add('endcolumn:');
-      this.add('column:');
 
+      this.add('column:');
       add(88, '', 'Light Terrain');
       add(89, 'Mint');
       add(90, 'Neon');
@@ -353,10 +351,9 @@ class JSRootMenu {
       add(98, '', 'Sandy Terrain');
       add(99, 'Sienna');
       add(100, 'Solar');
-
       this.add('endcolumn:');
-      this.add('column:');
 
+      this.add('column:');
       add(101, '', 'South West');
       add(102, '', 'Starry Night');
       add(103, '', 'Sunset');
@@ -370,7 +367,6 @@ class JSRootMenu {
       add(111, '', 'Gist Earth');
       add(112, 'Viridis');
       add(113, 'Cividis');
-
       this.add('endcolumn:');
 
       this.endsub();
@@ -388,13 +384,13 @@ class JSRootMenu {
    /** @summary Add selection menu entries
      * @param {String} name - name of submenu
      * @param {Array} values - array of string entries used as list for selection
-     * @param {String|Number} value - currently elected value, either name or index
+     * @param {String|Number} value - currently selected value, either name or index
      * @param {Function} set_func - function called when item selected, either name or index depending from value parameter
      * @param {String} [title] - optional title for menu items
      * @protected */
    addSelectMenu(name, values, value, set_func, title) {
       const use_number = (typeof value === 'number');
-      this.sub('' + name, undefined, undefined, title);
+      this.sub(name, undefined, undefined, title);
       for (let n = 0; n < values.length; ++n)
          this.addchk(use_number ? (n === value) : (values[n] === value), values[n], use_number ? n : values[n], res => set_func(use_number ? Number.parseInt(res) : res));
       this.endsub();
@@ -406,7 +402,7 @@ class JSRootMenu {
       // if (value === undefined) return;
       const colors = ['default', 'black', 'white', 'red', 'green', 'blue', 'yellow', 'magenta', 'cyan'];
 
-      this.sub('' + name, () => {
+      this.sub(name, () => {
          this.input('Enter color name - empty string will reset color', value).then(set_func);
       });
       let fillcol = 'black';
@@ -453,7 +449,7 @@ class JSRootMenu {
    /** @summary Add line style menu
      * @private */
    addLineStyleMenu(name, value, set_func) {
-      this.sub(''+name, () => this.input('Enter line style id (1-solid)', value, 'int', 1, 11).then(val => {
+      this.sub(name, () => this.input('Enter line style id (1-solid)', value, 'int', 1, 11).then(val => {
          if (getSvgLineStyle(val)) set_func(val);
       }));
       for (let n = 1; n < 11; ++n) {
@@ -468,7 +464,7 @@ class JSRootMenu {
    /** @summary Add fill style menu
      * @private */
    addFillStyleMenu(name, value, color_index, set_func) {
-      this.sub('' + name, () => {
+      this.sub(name, () => {
          this.input('Enter fill style id (1001-solid, 3100..4000)', value, 'int', 0, 4000).then(id => {
             if ((id >= 0) && (id <= 4000)) set_func(id);
          });
@@ -480,7 +476,8 @@ class JSRootMenu {
       supported.push(3144, 3244, 3344, 3305, 3315, 3325, 3490, 3481, 3472);
 
       for (let n = 0; n < supported.length; ++n) {
-         if (n % 7 === 0) this.add('column:');
+         if (n % 7 === 0)
+            this.add('column:');
 
          const selected = (value === supported[n]);
 
@@ -494,7 +491,8 @@ class JSRootMenu {
             this.add(svgelement.node().outerHTML, supported[n], arg => set_func(parseInt(arg)), `Pattern : ${supported[n]}` + (selected ? ' Active' : ''));
          } else
             this.addchk(selected, supported[n].toString(), supported[n], arg => set_func(parseInt(arg)));
-         if (n % 7 === 6) this.add('endcolumn:');
+         if (n % 7 === 6)
+            this.add('endcolumn:');
       }
       this.endsub();
    }
@@ -504,7 +502,7 @@ class JSRootMenu {
    addFontMenu(name, value, set_func) {
       const prec = value && Number.isInteger(value) ? value % 10 : 2;
 
-      this.sub('' + name, () => {
+      this.sub(name, () => {
          this.input('Enter font id from [0..20]', Math.floor(value/10), 'int', 0, 20).then(id => {
             if ((id >= 0) && (id <= 20)) set_func(id*10 + prec);
          });
@@ -579,12 +577,14 @@ class JSRootMenu {
             if (pp) changeObjectMember(pp, 'fFrameLineWidth', arg);
             painter.interactiveRedraw(redraw_arg, `exec:SetLineWidth(${arg})`);
          });
-         this.addColorMenu('color', painter.lineatt.color, arg => {
-            painter.lineatt.change(arg);
-            changeObjectMember(painter, 'fLineColor', arg, true);
-            if (pp) changeObjectMember(pp, 'fFrameLineColor', arg, true);
-            painter.interactiveRedraw(redraw_arg, getColorExec(arg, 'SetLineColor'));
-         });
+         if (!painter.lineatt.nocolor) {
+            this.addColorMenu('color', painter.lineatt.color, arg => {
+               painter.lineatt.change(arg);
+               changeObjectMember(painter, 'fLineColor', arg, true);
+               if (pp) changeObjectMember(pp, 'fFrameLineColor', arg, true);
+               painter.interactiveRedraw(redraw_arg, getColorExec(arg, 'SetLineColor'));
+            });
+         }
          this.addLineStyleMenu('style', painter.lineatt.style, id => {
             painter.lineatt.change(undefined, undefined, id);
             changeObjectMember(painter, 'fLineStyle', id);
@@ -705,9 +705,9 @@ class JSRootMenu {
 
       this.sub('Labels');
       this.addchk(faxis.TestBit(EAxisBits.kCenterLabels), 'Center',
-            arg => { faxis.InvertBit(EAxisBits.kCenterLabels); painter.interactiveRedraw('pad', `exec:CenterLabels(${arg})`, kind); });
+            arg => { faxis.SetBit(EAxisBits.kCenterLabels, arg); painter.interactiveRedraw('pad', `exec:CenterLabels(${arg})`, kind); });
       this.addchk(faxis.TestBit(EAxisBits.kLabelsVert), 'Rotate',
-            arg => { faxis.InvertBit(EAxisBits.kLabelsVert); painter.interactiveRedraw('pad', `exec:SetBit(TAxis::kLabelsVert,${arg})`, kind); });
+            arg => { faxis.SetBit(EAxisBits.kLabelsVert, arg); painter.interactiveRedraw('pad', `exec:SetBit(TAxis::kLabelsVert,${arg})`, kind); });
       this.addColorMenu('Color', faxis.fLabelColor,
             arg => { faxis.fLabelColor = arg; painter.interactiveRedraw('pad', getColorExec(arg, 'SetLabelColor'), kind); });
       this.addSizeMenu('Offset', -0.02, 0.1, 0.01, faxis.fLabelOffset,
@@ -743,20 +743,21 @@ class JSRootMenu {
          });
       });
       this.addchk(faxis.TestBit(EAxisBits.kCenterTitle), 'Center',
-            arg => { faxis.InvertBit(EAxisBits.kCenterTitle); painter.interactiveRedraw('pad', `exec:CenterTitle(${arg})`, kind); });
+            arg => { faxis.SetBit(EAxisBits.kCenterTitle, arg); painter.interactiveRedraw('pad', `exec:CenterTitle(${arg})`, kind); });
       if (!painter?.snapid) {
          this.addchk(faxis.TestBit(EAxisBits.kOppositeTitle), 'Opposite',
-                () => { faxis.InvertBit(EAxisBits.kOppositeTitle); painter.redrawPad(); });
+                arg => { faxis.SetBit(EAxisBits.kOppositeTitle, arg); painter.redrawPad(); });
       }
       this.addchk(faxis.TestBit(EAxisBits.kRotateTitle), 'Rotate',
-            arg => { faxis.InvertBit(EAxisBits.kRotateTitle); painter.interactiveRedraw('pad', is_gaxis ? `exec:SetBit(TAxis::kRotateTitle, ${arg})` : `exec:RotateTitle(${arg})`, kind); });
-      if (is_gaxis) {
-         this.addColorMenu('Color', faxis.fTextColor,
-               arg => { faxis.fTextColor = arg; painter.interactiveRedraw('pad', getColorExec(arg, 'SetTitleColor'), kind); });
-      } else {
-         this.addColorMenu('Color', faxis.fTitleColor,
-               arg => { faxis.fTitleColor = arg; painter.interactiveRedraw('pad', getColorExec(arg, 'SetTitleColor'), kind); });
-      }
+            arg => { faxis.SetBit(EAxisBits.kRotateTitle, arg); painter.interactiveRedraw('pad', is_gaxis ? `exec:SetBit(TAxis::kRotateTitle, ${arg})` : `exec:RotateTitle(${arg})`, kind); });
+      this.addColorMenu('Color', is_gaxis ? faxis.fTextColor : faxis.fTitleColor, arg => {
+         if (is_gaxis)
+            faxis.fTextColor = arg;
+         else
+            faxis.fTitleColor = arg;
+
+         painter.interactiveRedraw('pad', getColorExec(arg, 'SetTitleColor'), kind);
+      });
       this.addSizeMenu('Offset', 0, 3, 0.2, faxis.fTitleOffset,
                       arg => { faxis.fTitleOffset = arg; painter.interactiveRedraw('pad', `exec:SetTitleOffset(${arg})`, kind); });
       a = faxis.fTitleSize >= 1;
@@ -834,6 +835,7 @@ class JSRootMenu {
       this.addchk(settings.ZoomTouch, 'Touch', flag => { settings.ZoomTouch = flag; });
       this.endsub();
       this.addchk(settings.HandleKeys, 'Keypress handling', flag => { settings.HandleKeys = flag; });
+      this.addchk(!settings.UserSelect, 'User select', flag => { settings.UserSelect = flag ? '' : 'none'; }, 'Set "user-select: none" for drawings to avoid text selection ');
       this.addchk(settings.MoveResize, 'Move and resize', flag => { settings.MoveResize = flag; });
       this.addchk(settings.DragAndDrop, 'Drag and drop', flag => { settings.DragAndDrop = flag; });
       this.addchk(settings.DragGraphs, 'Drag graph points', flag => { settings.DragGraphs = flag; });
@@ -891,7 +893,7 @@ class JSRootMenu {
 
       const setStyleField = arg => { gStyle[arg.slice(1)] = parseInt(arg[0]); },
             addStyleIntField = (name, field, arr) => {
-         this.sub('' + name);
+         this.sub(name);
          const curr = gStyle[field] >= arr.length ? 1 : gStyle[field];
          for (let v = 0; v < arr.length; ++v)
             this.addchk(curr === v, arr[v], `${v}${field}`, setStyleField);
@@ -932,6 +934,8 @@ class JSRootMenu {
       this.addSizeMenu('Line width', 1, 10, 1, gStyle.fFrameLineWidth, w => { gStyle.fFrameLineWidth = w; });
       this.addLineStyleMenu('Line style', gStyle.fFrameLineStyle, st => { gStyle.fFrameLineStyle = st; });
       this.addSizeMenu('Border size', 0, 10, 1, gStyle.fFrameBorderSize, sz => { gStyle.fFrameBorderSize = sz; });
+      this.addSelectMenu('Border mode', ['Down', 'Off', 'Up'], gStyle.fFrameBorderMode + 1, v => { gStyle.fFrameBorderMode = v - 1; });
+
       // fFrameBorderMode: 0,
       this.sub('Margins');
       this.addSizeMenu('Bottom', 0, 0.5, 0.05, gStyle.fPadBottomMargin, v => { gStyle.fPadBottomMargin = v; });
@@ -1007,7 +1011,8 @@ class JSRootMenu {
       }, 'Store settings and gStyle in browser local storage');
       this.add('Delete settings', () => { saveSettings(-1); saveStyle(-1); }, 'Delete settings and gStyle from browser local storage');
 
-      if (!alone) this.endsub();
+      if (!alone)
+         this.endsub();
    }
 
    /** @summary Run modal dialog
@@ -1031,7 +1036,7 @@ class JSRootMenu {
      * @return {Promise} with true when 'Ok' pressed or false when 'Cancel' pressed
      * @protected */
    async confirm(title, message) {
-      return this.runModal(title, message, { btns: true, height: 120, width: 400 }).then(elem => { return !!elem; });
+      return this.runModal(title, message, { btns: true, height: 120, width: 400 }).then(elem => Boolean(elem));
    }
 
    /** @summary Input value
@@ -1101,9 +1106,12 @@ class JSRootMenu {
                if ((arg.fTitle === 'Option_t*') || (arg.fTitle === 'const char*')) {
                   // check quotes,
                   // TODO: need to make more precise checking of escape characters
-                  if (!value) value = '""';
-                  if (value[0] !== '"') value = '"' + value;
-                  if (value[value.length-1] !== '"') value += '"';
+                  if (!value)
+                     value = '""';
+                  if (value[0] !== '"')
+                     value = '"' + value;
+                  if (value.at(-1) !== '"')
+                     value += '"';
                }
 
                args += (k > 0 ? ',' : '') + value;
@@ -1123,7 +1131,7 @@ class JSRootMenu {
       for (let n = 0; n < args.length; ++n) {
          main_content += `<label for="${dlg_id}_inp${n}">arg${n+1}</label>`+
                          `<input type='text' id="${dlg_id}_inp${n}" value="${args[n]}" style="width:100%;display:block"/>`;
-     }
+      }
 
       main_content += '</fieldset></form>';
 
@@ -1169,7 +1177,7 @@ class StandaloneMenu extends JSRootMenu {
      * @param {string} name - item name
      * @param {function} func - func called when item is selected */
    add(name, arg, func, title) {
-      let curr = this.stack[this.stack.length-1];
+      let curr = this.stack.at(-1);
 
       if (name === sSeparator)
          return curr.push({ divider: true });
@@ -1179,15 +1187,14 @@ class StandaloneMenu extends JSRootMenu {
 
       if (name === sEndsub) {
          this.stack.pop();
-         curr = this.stack[this.stack.length-1];
-         if (curr[curr.length-1].sub.length === 0)
-            curr[curr.length-1].sub = undefined;
+         curr = this.stack.at(-1);
+         if (curr.at(-1).sub.length === 0)
+            curr.at(-1).sub = undefined;
          return;
       }
 
       if (name === 'endcolumn:')
          return this.stack.pop();
-
 
       if (isFunc(arg)) { title = func; func = arg; arg = name; }
 
@@ -1229,6 +1236,9 @@ class StandaloneMenu extends JSRootMenu {
    _buildContextmenu(menu, left, top, loc) {
       const doc = getDocument(),
             outer = doc.createElement('div'),
+            clname = 'jsroot_ctxt_container',
+            clfocus = 'jsroot_ctxt_focus',
+            clcolumn = 'jsroot_ctxt_column',
             container_style =
          'position: absolute; top: 0; user-select: none; z-index: 100000; background-color: rgb(250, 250, 250); margin: 0; padding: 0px; width: auto;'+
          'min-width: 100px; box-shadow: 0px 0px 10px rgb(0, 0, 0, 0.2); border: 3px solid rgb(215, 215, 215); font-family: Arial, helvetica, sans-serif, serif;'+
@@ -1236,23 +1246,23 @@ class StandaloneMenu extends JSRootMenu {
 
       // if loc !== doc.body then its a submenu, so it needs to have position: relative;
       if (loc === doc.body) {
-         // delete all elements with className jsroot_ctxt_container
-         const deleteElems = doc.getElementsByClassName('jsroot_ctxt_container');
-         while (deleteElems.length > 0)
-            deleteElems[0].parentNode.removeChild(deleteElems[0]);
+         // delete all elements with menu className
+         const deleteElems = doc.getElementsByClassName(clname);
+         for (let k = deleteElems.length - 1; k >= 0; --k)
+            deleteElems[k].parentNode.removeChild(deleteElems[k]);
 
-         outer.className = 'jsroot_ctxt_container';
+         outer.className = clname;
          outer.style = container_style;
          outer.style.position = 'fixed';
          outer.style.left = left + 'px';
          outer.style.top = top + 'px';
       } else if ((left < 0) && (top === left)) {
          // column
-         outer.className = 'jsroot_ctxt_column';
+         outer.className = clcolumn;
          outer.style.float = 'left';
          outer.style.width = (100/-left).toFixed(1) + '%';
       } else {
-         outer.className = 'jsroot_ctxt_container';
+         outer.className = clname;
          outer.style = container_style;
          outer.style.left = -loc.offsetLeft + loc.offsetWidth + 'px';
       }
@@ -1361,7 +1371,7 @@ class StandaloneMenu extends JSRootMenu {
 
             const sub = doc.createElement('span');
             if (d.text.indexOf('<nobr>') === 0)
-               sub.textContent = d.text.slice(6, d.text.length-7);
+               sub.textContent = d.text.slice(6, d.text.length - 7);
             else
                sub.textContent = d.text;
             text.appendChild(sub);
@@ -1369,14 +1379,14 @@ class StandaloneMenu extends JSRootMenu {
 
          hovArea.appendChild(text);
 
-         function changeFocus(item, on) {
+         function changeFocus(fitem, on) {
             if (on) {
-               item.classList.add('jsroot_ctxt_focus');
-               item.style['background-color'] = 'rgb(220, 220, 220)';
-            } else if (item.classList.contains('jsroot_ctxt_focus')) {
-               item.style['background-color'] = null;
-               item.classList.remove('jsroot_ctxt_focus');
-               item.querySelector('.jsroot_ctxt_container')?.remove();
+               fitem.classList.add(clfocus);
+               fitem.style['background-color'] = 'rgb(220, 220, 220)';
+            } else if (fitem.classList.contains(clfocus)) {
+               fitem.style['background-color'] = null;
+               fitem.classList.remove(clfocus);
+               fitem.querySelector(`.${clname}`)?.remove();
             }
          }
 
@@ -1391,7 +1401,7 @@ class StandaloneMenu extends JSRootMenu {
                extraText.addEventListener('click', evnt => {
                   evnt.preventDefault();
                   evnt.stopPropagation();
-                  const was_active = item.parentNode.querySelector('.jsroot_ctxt_focus');
+                  const was_active = item.parentNode.querySelector(`.${clfocus}`);
 
                   if (was_active)
                      changeFocus(was_active, false);
@@ -1450,7 +1460,7 @@ class StandaloneMenu extends JSRootMenu {
             // Does contextmenu overflow window height?
             outer.style.top = (docHeight - outer.offsetHeight) + 'px';
          }
-      } else if (outer.className !== 'jsroot_ctxt_column') {
+      } else if (outer.className !== clcolumn) {
          // if its sub-contextmenu
          const dimensionsLoc = loc.getBoundingClientRect(), dimensionsOuter = outer.getBoundingClientRect();
 
@@ -1484,15 +1494,15 @@ class StandaloneMenu extends JSRootMenu {
    async show(event) {
       this.remove();
 
-      if (!event && this.show_evnt) event = this.show_evnt;
+      if (!event && this.show_evnt)
+         event = this.show_evnt;
 
       const doc = getDocument(),
             woffset = typeof window === 'undefined' ? { x: 0, y: 0 } : { x: window.scrollX, y: window.scrollY };
 
       doc.body.addEventListener('click', this.remove_handler);
 
-      const oldmenu = doc.getElementById(this.menuname);
-      if (oldmenu) oldmenu.remove();
+      doc.getElementById(this.menuname)?.remove();
 
       this.element = this._buildContextmenu(this.code, (event?.clientX || 0) + woffset.x, (event?.clientY || 0) + woffset.y, doc.body);
 
@@ -1503,9 +1513,11 @@ class StandaloneMenu extends JSRootMenu {
 
    /** @summary Run modal elements with standalone code */
    createModal(title, main_content, args) {
-      if (!args) args = {};
+      if (!args)
+         args = {};
 
-      if (!args.Ok) args.Ok = 'Ok';
+      if (!args.Ok)
+         args.Ok = 'Ok';
 
       const modal = { args }, dlg_id = (this?.menuname ?? sDfltName) + sDfltDlg;
       d3_select(`#${dlg_id}`).remove();
@@ -1572,8 +1584,10 @@ class StandaloneMenu extends JSRootMenu {
       });
 
       let f = modal.element.select('.jsroot_dialog_content').select('input');
-      if (f.empty()) f = modal.element.select('.jsroot_dialog_footer').select('button');
-      if (!f.empty()) f.node().focus();
+      if (f.empty())
+         f = modal.element.select('.jsroot_dialog_footer').select('button');
+      if (!f.empty())
+         f.node().focus();
       return modal;
    }
 
@@ -1610,7 +1624,7 @@ function createMenu(evnt, handler, menuname) {
 function closeMenu(menuname) {
    const element = getDocument().getElementById(menuname || sDfltName);
    element?.remove();
-   return !!element;
+   return Boolean(element);
 }
 
 /** @summary Returns true if menu or modal dialog present
@@ -1634,10 +1648,12 @@ function showPainterMenu(evnt, painter, kind) {
 
    createMenu(evnt, painter).then(menu => {
       painter.fillContextMenu(menu);
-      if ((kind === kToFront) && isFunc(painter.bringToFront)) {
-         menu.add('Bring to front', () => painter.bringToFront(true));
+      if (kind === kNoReorder)
          kind = undefined;
-      }
+      else if (isFunc(painter.bringToFront))
+         menu.add('Bring to front', () => painter.bringToFront(true));
+      if (kind === kToFront)
+         kind = undefined;
       return painter.fillObjectExecMenu(menu, kind);
    }).then(menu => menu.show());
 }
@@ -1666,6 +1682,6 @@ function assignContextMenu(painter, kind) {
       painter.draw_g.on('contextmenu', settings.ContextMenu ? evnt => showPainterMenu(evnt, painter, kind) : null);
 }
 
-Object.assign(internals.jsroot, { createMenu, closeMenu, assignContextMenu, kToFront });
+Object.assign(internals.jsroot, { createMenu, closeMenu, assignContextMenu, kToFront, kNoReorder });
 
-export { createMenu, closeMenu, showPainterMenu, assignContextMenu, hasMenu, kToFront };
+export { createMenu, closeMenu, showPainterMenu, assignContextMenu, hasMenu, kToFront, kNoReorder };

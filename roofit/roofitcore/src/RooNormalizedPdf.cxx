@@ -16,7 +16,6 @@
 
 #include <array>
 
-ClassImp(RooFit::Detail::RooNormalizedPdf);
 
 /**
  * \class RooNormalizedPdf
@@ -52,12 +51,6 @@ void RooNormalizedPdf::doEval(RooFit::EvalContext &ctx) const
    for (std::size_t i = 0; i < nEvalErrorsType2; ++i) {
       logEvalError("p.d.f value is Not-a-Number");
    }
-}
-
-void RooNormalizedPdf::translate(RooFit::Detail::CodeSquashContext &ctx) const
-{
-   // For now just return function/normalization integral.
-   ctx.addResult(this, ctx.getResult(_pdf) + "/" + ctx.getResult(_normIntegral));
 }
 
 } // namespace Detail

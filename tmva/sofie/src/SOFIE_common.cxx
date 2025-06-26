@@ -59,6 +59,9 @@ std::string ConvertTypeToString(ETensorType type){
       case ETensorType::FLOAT : {
          return "float";
       }
+      case ETensorType::INT8 : {
+         return "int8_t";
+      }
       case ETensorType::INT16 : {
          return "int16_t";
       }
@@ -67,6 +70,9 @@ std::string ConvertTypeToString(ETensorType type){
       }
       case ETensorType::INT64 : {
          return "int64_t";
+      }
+      case ETensorType::UINT8 : {
+         return "uint8_t";
       }
       case ETensorType::UINT16 : {
          return "uint16_t";
@@ -84,7 +90,7 @@ std::string ConvertTypeToString(ETensorType type){
          return "bool";
       }
       default:{
-         return "other";
+         return "other_" + std::to_string( (int) type);
       }
    }
 }
@@ -373,6 +379,23 @@ std::vector<size_t>  UTILITY::UnidirectionalBroadcastShape(std::vector<size_t> s
             + ConvertShapeToString(shapeA) + " and " + ConvertShapeToString(shapeB)
             + " to a common shape.");
    }
+}
+
+// UNidirectional boradcast specializaiton for vector<bool>
+
+// specialization for vector of boolean
+void UTILITY::UnidirectionalBroadcast(const std::vector<bool> & data, const std::vector<size_t>& shape, const std::vector<size_t>& targetShape, std::vector<bool> & broadcastedData)
+ {
+   // Prepend shape with ones
+   auto ncdata = const_cast<std::vector<bool> &>(data);
+   if (shape.size() < targetShape.size()) {
+      size_t targetSize = targetShape.size();
+      std::vector<size_t> newShape(targetSize, 1);
+      size_t offset = targetSize - shape.size();
+      std::copy(shape.begin(), shape.end(), newShape.begin() + offset);
+      UTILITY::BroadcastTensor<bool, const std::vector<bool> &, std::vector<bool> &>(ncdata, newShape, targetShape, broadcastedData);
+   }
+   UTILITY::BroadcastTensor<bool, const std::vector<bool> &, std::vector<bool> &>(ncdata, shape, targetShape, broadcastedData);
 }
 
 std::string UTILITY::Clean_name(std::string input_tensor_name){

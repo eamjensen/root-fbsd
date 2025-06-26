@@ -115,6 +115,8 @@ clang/LLVM technology.
 #include "cling/Utils/SourceNormalization.h"
 #include "cling/Interpreter/Exception.h"
 
+#include "clang/Interpreter/CppInterOp.h"
+
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Module.h"
 
@@ -1146,7 +1148,7 @@ static GlobalModuleIndex *loadGlobalModuleIndex(cling::Interpreter &interp)
 #ifndef NDEBUG
                   SourceManager &SM = ND->getASTContext().getSourceManager();
                   SourceLocation Loc = ND->getLocation();
-                  const FileEntry *FE = SM.getFileEntryForID(SM.getFileID(Loc));
+                  OptionalFileEntryRef FE = SM.getFileEntryRefForID(SM.getFileID(Loc));
                   (void)FE;
                   assert(FE->getName().contains("input_line_"));
 #endif
@@ -1333,10 +1335,11 @@ static void RegisterPreIncludedHeaders(cling::Interpreter &clingInterp)
 /// \param title title for TInterpreter
 /// \param argv - array of arguments passed to the cling::Interpreter constructor
 ///               e.g. `-DFOO=bar`. The last element of the array must be `nullptr`.
+/// \param interpLibHandle handle to interpreter library
 
 TCling::TCling(const char *name, const char *title, const char* const argv[], void *interpLibHandle)
 : TInterpreter(name, title), fGlobalsListSerial(-1), fMapfile(nullptr),
-  fRootmapFiles(nullptr), fLockProcessLine(true), fNormalizedCtxt(nullptr),
+  fRootmapFiles(nullptr), fLockProcessLine(true), fNormalizedCtxt(nullptr), fLookupHelper(nullptr),
   fPrevLoadedDynLibInfo(nullptr), fClingCallbacks(nullptr), fAutoLoadCallBack(nullptr),
   fTransactionCount(0), fHeaderParsingOnDemand(true), fIsAutoParsingSuspended(kFALSE)
 {
@@ -1536,6 +1539,14 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
                                                        llvmResourceDir, extensions,
                                                        interpLibHandle);
 
+   if (!fInterpreter->getCI()) { // Compiler instance could not be created. See https://its.cern.ch/jira/browse/ROOT-10239
+      return;
+   }
+
+   // Tell CppInterOp that the cling::Interpreter instance is managed externally by ROOT
+   // Sets the interpreter by passing the fInterpreter handle as soon as TCling is initialized
+   Cpp::UseExternalInterpreter((Cpp::TInterp_t*)fInterpreter.get());
+
    // Don't check whether modules' files exist.
    fInterpreter->getCI()->getPreprocessorOpts().DisablePCHOrModuleValidation =
       DisableValidationForModuleKind::All;
@@ -1604,7 +1615,7 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
                         /*prepend=*/true);
       auto ShouldPermanentlyIgnore = [](llvm::StringRef FileName) -> bool{
          llvm::StringRef stem = llvm::sys::path::stem(FileName);
-         return stem.startswith("libNew") || stem.startswith("libcppyy_backend");
+         return stem.starts_with("libNew") || stem.starts_with("libcppyy_backend");
       };
       // Initialize the dyld for AutoloadLibraryGenerator.
       DLM.initializeDyld(ShouldPermanentlyIgnore);
@@ -1635,6 +1646,8 @@ TCling::~TCling()
 
 void TCling::Initialize()
 {
+   if (!fClingCallbacks) // Compiler instance could not be created. See https://its.cern.ch/jira/browse/ROOT-10239
+      return;
    fClingCallbacks->Initialize();
 
    // We are set up. Enable ROOT's AutoLoading.
@@ -1692,6 +1705,7 @@ void TCling::RegisterRdictForLoadPCM(const std::string &pcmFileNameFullPath, llv
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Tries to load a PCM from TFile; returns true on success.
+/// The caller of this function should be holding the ROOT Write lock.
 
 void TCling::LoadPCMImpl(TFile &pcmFile)
 {
@@ -1807,6 +1821,7 @@ void TCling::LoadPCMImpl(TFile &pcmFile)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Tries to load a rdict PCM, issues diagnostics if it fails.
+/// The caller of this function should be holding the ROOT Write lock.
 
 void TCling::LoadPCM(std::string pcmFileNameFullPath)
 {
@@ -2006,6 +2021,7 @@ void TCling::ProcessClassesToUpdate()
 /// libraries.
 /// The payload code is injected "as is" in the interpreter.
 /// The value of 'triggerFunc' is used to find the shared library location.
+/// The caller of this function should be holding the ROOT Write lock.
 
 void TCling::RegisterModule(const char* modulename,
                             const char** headers,
@@ -2261,7 +2277,7 @@ void TCling::RegisterModule(const char* modulename,
    bool ModuleWasSuccessfullyLoaded = false;
    if (hasCxxModule) {
       std::string ModuleName = modulename;
-      if (llvm::StringRef(modulename).startswith("lib"))
+      if (llvm::StringRef(modulename).starts_with("lib"))
          ModuleName = llvm::StringRef(modulename).substr(3).str();
 
       // In case we are directly loading the library via gSystem->Load() without
@@ -2971,9 +2987,12 @@ void TCling::InspectMembers(TMemberInspector& insp, const void* obj,
             // if we can not find the member (which should not really happen),
             // let's consider it transient.
             Bool_t transient = isTransient || !mbr || !mbr->IsPersistent();
-
+            if (!mbr || !mbr->IsPersistent())
+               insp.IncrementNestedTransient();
             insp.InspectMember(sFieldRecName.c_str(), cobj + fieldOffset,
                                (fieldName + '.').c_str(), transient);
+            if (!mbr || !mbr->IsPersistent())
+               insp.DecrementNestedTransient();
 
          }
       }
@@ -3068,6 +3087,14 @@ void TCling::InspectMembers(TMemberInspector& insp, const void* obj,
                                  insp, isTransient);
       }
    } // loop over bases
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Check if constructor exited correctly, ie the instance is in a valid state
+/// \return true if there is a compiler instance available, false otherwise
+bool TCling::IsValid() const
+{
+   return fInterpreter->getCI() != nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4083,7 +4110,7 @@ void TCling::SetClassInfo(TClass* cl, Bool_t reload, Bool_t silent)
    // Handle the special case of 'tuple' where we ignore the real implementation
    // details and just overlay a 'simpler'/'simplistic' version that is easy
    // for the I/O to understand and handle.
-   if (strncmp(cl->GetName(),"tuple<",strlen("tuple<"))==0) {
+   if (strncmp(cl->GetName(),"tuple<",std::char_traits<char>::length("tuple<"))==0) {
       if (!reload)
          name = AlternateTuple(cl->GetName(), fInterpreter->getLookupHelper(), silent);
       if (reload || name.empty()) {
@@ -6610,8 +6637,7 @@ void* TCling::LazyFunctionCreatorAutoload(const std::string& mangled_name) {
    std::string libName = DLM.searchLibrariesForSymbol(mangled_name,
                                                       /*searchSystem=*/ true);
 
-   assert(!llvm::StringRef(libName).startswith("libNew") &&
-          "We must not resolve symbols from libNew!");
+   assert(!llvm::StringRef(libName).starts_with("libNew") && "We must not resolve symbols from libNew!");
 
    if (libName.empty())
       return nullptr;
@@ -6655,6 +6681,18 @@ void TCling::RefreshClassInfo(TClass *cl, const clang::NamedDecl *def, bool alia
       }
    } else if (!cl->TestBit(TClass::kLoading) && !cl->fHasRootPcmInfo) {
       cl->ResetCaches();
+      if (strncmp(cl->GetName(),"tuple<",strlen("tuple<"))==0) {
+         // We need to use the Emulated Tuple but we should not trigger parsing
+         // yet, so delay the creation of the ClassInfo
+         delete ((TClingClassInfo *)cl->fClassInfo);
+         cl->fClassInfo = nullptr;
+         cl->fCanLoadClassInfo = true;
+         cl->RemoveStreamerInfo(cl->fClassVersion);
+         if (cl->fState != TClass::kHasTClassInit) {
+            cl->fState = TClass::kInterpreted;
+         }
+         return;
+      }
       // yes, this is almost a waste of time, but we do need to lookup
       // the 'type' corresponding to the TClass anyway in order to
       // preserve the opaque typedefs (Double32_t)
@@ -7253,7 +7291,7 @@ static bool hasParsedRootmapForLibrary(llvm::StringRef lib)
 {
    // Check if we have parsed a rootmap file.
    llvm::SmallString<256> rootmapName;
-   if (!lib.startswith("lib"))
+   if (!lib.starts_with("lib"))
       rootmapName.append("lib");
 
    rootmapName.append(llvm::sys::path::filename(lib));
@@ -9588,14 +9626,6 @@ bool TCling::IsVoidPointerType(const void * QualTypePtr) const
 {
    clang::QualType QT = clang::QualType::getFromOpaquePtr(QualTypePtr);
    return QT->isVoidPointerType();
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-bool TCling::FunctionDeclId_IsMethod(DeclId_t fdeclid) const
-{
-   clang::FunctionDecl *FD = (clang::FunctionDecl *) fdeclid;
-   return llvm::isa_and_nonnull<clang::CXXMethodDecl>(FD);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

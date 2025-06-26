@@ -1,6 +1,6 @@
 import { create, settings, isNodeJs, isStr, btoa_func, clTAxis, clTPaletteAxis, clTImagePalette, getDocument } from '../core.mjs';
 import { toColor } from '../base/colors.mjs';
-import { assignContextMenu } from '../gui/menu.mjs';
+import { assignContextMenu, kNoReorder } from '../gui/menu.mjs';
 import { DrawOptions } from '../base/BasePainter.mjs';
 import { ObjectPainter } from '../base/ObjectPainter.mjs';
 import { TPavePainter } from '../hist/TPavePainter.mjs';
@@ -25,9 +25,9 @@ class TASImagePainter extends ObjectPainter {
       if (d.check('CONST')) {
          this.options.constRatio = true;
          if (obj) obj.fConstRatio = true;
-         console.log('use const');
       }
-      if (d.check('Z')) this.options.Zscale = true;
+      if (d.check('Z'))
+         this.options.Zscale = true;
    }
 
    /** @summary Create RGBA buffers */
@@ -40,7 +40,7 @@ class TASImagePainter extends ObjectPainter {
 
       for (let lvl = 0, indx = 1; lvl <= nlevels; ++lvl) {
          const l = lvl/nlevels;
-         while ((pal.fPoints[indx] < l) && (indx < pal.fPoints.length-1)) indx++;
+         while ((pal.fPoints[indx] < l) && (indx < pal.fPoints.length - 1)) indx++;
 
          const r1 = (pal.fPoints[indx] - l) / (pal.fPoints[indx] - pal.fPoints[indx-1]),
                r2 = (l - pal.fPoints[indx-1]) / (pal.fPoints[indx] - pal.fPoints[indx-1]);
@@ -79,7 +79,7 @@ class TASImagePainter extends ObjectPainter {
          getPaletteColor(pal, zval) {
             if (!this.arr || !this.rgba)
                return 'white';
-            const indx = Math.round((zval - this.arr[0]) / (this.arr[this.arr.length-1] - this.arr[0]) * (this.rgba.length-4)/4) * 4;
+            const indx = Math.round((zval - this.arr[0]) / (this.arr.at(-1) - this.arr.at(0)) * (this.rgba.length - 4)/4) * 4;
             return toColor(this.rgba[indx]/255, this.rgba[indx+1]/255, this.rgba[indx+2]/255, this.rgba[indx+3]/255);
          }
       };
@@ -112,7 +112,7 @@ class TASImagePainter extends ObjectPainter {
                arr[dst++] = this.rgba[iii++];
                arr[dst++] = this.rgba[iii++];
                arr[dst++] = this.rgba[iii++];
-               arr[dst++] = this.rgba[iii++];
+               arr[dst++] = this.rgba[iii];
             }
          }
 
@@ -279,7 +279,7 @@ class TASImagePainter extends ObjectPainter {
          if (!res?.url)
             return this;
 
-         const img = this.createG(!!fp)
+         const img = this.createG(fp)
              .append('image')
              .attr('href', res.url)
              .attr('width', rect.width)
@@ -294,7 +294,7 @@ class TASImagePainter extends ObjectPainter {
                img.style('cursor', 'pointer');
          }
 
-         assignContextMenu(this);
+         assignContextMenu(this, kNoReorder);
 
          if (!fp || !res.can_zoom)
             return this;
@@ -307,7 +307,7 @@ class TASImagePainter extends ObjectPainter {
       });
    }
 
-   /** @summary Fill TASImage context */
+   /** @summary Fill TASImage context menu */
    fillContextMenuItems(menu) {
       const obj = this.getObject();
       if (obj) {
@@ -380,7 +380,7 @@ class TASImagePainter extends ObjectPainter {
          pal_painter = p;
 
          // mark painter as secondary - not in list of TCanvas primitives
-         pal_painter.setSecondary(this);
+         pal_painter.setSecondaryId(this);
 
          // make dummy redraw, palette will be updated only from histogram painter
          pal_painter.redraw = function() {};

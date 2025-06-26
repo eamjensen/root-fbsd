@@ -20,13 +20,15 @@ function assignRAxisMethods(axis) {
       axis.GetBinCoord = function(bin) { return this.fLow + bin/this.fInvBinWidth; };
       axis.FindBin = function(x, add) { return Math.floor((x - this.fLow)*this.fInvBinWidth + add); };
    } else if (axis._typename === `${nsREX}RAxisIrregular`) {
-      axis.min = axis.fBinBorders[0];
-      axis.max = axis.fBinBorders[axis.fBinBorders.length - 1];
+      axis.min = axis.fBinBorders.at(0);
+      axis.max = axis.fBinBorders.at(-1);
       axis.GetNumBins = function() { return this.fBinBorders.length; };
       axis.GetBinCoord = function(bin) {
          const indx = Math.round(bin);
-         if (indx <= 0) return this.fBinBorders[0];
-         if (indx >= this.fBinBorders.length) return this.fBinBorders[this.fBinBorders.length - 1];
+         if (indx <= 0)
+            return this.fBinBorders.at(0);
+         if (indx >= this.fBinBorders.length)
+            return this.fBinBorders.at(-1);
          if (indx === bin) return this.fBinBorders[indx];
          const indx2 = (bin < indx) ? indx - 1 : indx + 1;
          return this.fBinBorders[indx] * Math.abs(bin-indx2) + this.fBinBorders[indx2] * Math.abs(bin-indx);
@@ -460,14 +462,17 @@ class RHistPainter extends RObjectPainter {
       // be aware - here indexes starts from 0
       const taxis = this.getAxis(axis),
             nbins = this['nbins'+axis] || 0;
-      let indx = 0;
 
-      if (this.options.second_x && axis === 'x') axis = 'x2';
-      if (this.options.second_y && axis === 'y') axis = 'y2';
+      if (this.options.second_x && axis === 'x')
+         axis = 'x2';
+      if (this.options.second_y && axis === 'y')
+         axis = 'y2';
 
       const main = this.getFramePainter(),
             min = main ? main[`zoom_${axis}min`] : 0,
             max = main ? main[`zoom_${axis}max`] : 0;
+
+      let indx;
 
       if ((min !== max) && taxis) {
          if (size === 'left')
@@ -480,7 +485,6 @@ class RHistPainter extends RObjectPainter {
             indx = nbins;
       } else
          indx = (size === 'left') ? 0 : nbins;
-
 
       return indx;
    }
@@ -525,6 +529,13 @@ class RHistPainter extends RObjectPainter {
       if (this.draw_content)
          pp.addPadButton('statbox', 'Toggle stat box', 'ToggleStatBox');
       if (!not_shown) pp.showPadButtons();
+   }
+
+   /** @summary Return histo bin errors
+    * @private */
+   getBinErrors(histo, bin /* , binz */) {
+      const err = histo.getBinError(bin);
+      return { low: err, up: err };
    }
 
    /** @summary get tool tips used in 3d mode */
@@ -823,11 +834,11 @@ class RHistPainter extends RObjectPainter {
             if (!Number.isFinite(binz)) continue;
             res.sumz += binz;
             if (args.pixel_density) {
-               binarea = (res.grx[i+res.stepi]-res.grx[i])*(res.gry[j]-res.gry[j+res.stepj]);
+               binarea = (res.grx[i+res.stepi] - res.grx[i]) * (res.gry[j] - res.gry[j+res.stepj]);
                if (binarea <= 0) continue;
                res.max = Math.max(res.max, binz);
                if ((binz > 0) && ((binz < res.min) || (res.min === 0))) res.min = binz;
-               binz = binz/binarea;
+               binz /= binarea;
             }
             if (is_first) {
                this.maxbin = this.minbin = binz;

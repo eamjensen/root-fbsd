@@ -1319,58 +1319,42 @@ Long64_t TH2Poly::Merge(TCollection *coll)
 
 void TH2Poly::SavePrimitive(std::ostream &out, Option_t *option)
 {
-   out <<"   "<<std::endl;
-   out <<"   "<< ClassName() <<" *";
+   // histogram pointer has by default the histogram name.
+   // however, in case histogram has no directory, it is safer to add a
+   // incremental suffix
+   TString hname = ProvideSaveName(option, kTRUE);
 
-   //histogram pointer has by default the histogram name.
-   //however, in case histogram has no directory, it is safer to add a
-   //incremental suffix
-   static Int_t hcounter = 0;
-   TString histName = GetName();
-   if (!fDirectory && !histName.Contains("Graph")) {
-      hcounter++;
-      histName += "__";
-      histName += hcounter;
-   }
+   out << "   \n";
 
-   TString hname = gInterpreter->MapCppName(histName.Data());
-
-   //Construct the class initialization
-   out << hname << " = new " << ClassName() << "(\"" << hname << "\", \""
-       << GetTitle() << "\", " << fCellX << ", " << fXaxis.GetXmin()
-       << ", " << fXaxis.GetXmax()
-       << ", " << fCellY << ", " << fYaxis.GetXmin() << ", "
-       << fYaxis.GetXmax() << ");" << std::endl;
+   // Construct the class initialization
+   out << "   " << ClassName() << " *" << hname << " = new " << ClassName() << "(\"" << hname << "\", \""
+       << TString(GetTitle()).ReplaceSpecialCppChars() << "\", " << fCellX << ", " << fXaxis.GetXmin() << ", "
+       << fXaxis.GetXmax() << ", " << fCellY << ", " << fYaxis.GetXmin() << ", " << fYaxis.GetXmax() << ");\n";
 
    // Save Bins
-   TIter       next(fBins);
-   TObject    *obj;
-   TH2PolyBin *th2pBin;
-
-   while((obj = next())){
-      th2pBin = (TH2PolyBin*) obj;
-      th2pBin->GetPolygon()->SavePrimitive(out, TString::Format("th2poly%s",hname.Data()));
+   TIter next(fBins);
+   while (auto obj = next()) {
+      auto th2pBin = (TH2PolyBin *)obj;
+      th2pBin->GetPolygon()->SavePrimitive(out, TString::Format("th2poly%s", hname.Data()));
    }
 
    // save bin contents
-   out<<"   "<<std::endl;
-   Int_t bin;
-   for (bin=1;bin<=GetNumberOfBins();bin++) {
+   out << "   \n";
+   for (Int_t bin = 1; bin <= GetNumberOfBins(); bin++) {
       Double_t bc = GetBinContent(bin);
-      if (bc) {
-         out<<"   "<<hname<<"->SetBinContent("<<bin<<","<<bc<<");"<<std::endl;
-      }
+      if (bc)
+         out << "   " << hname << "->SetBinContent(" << bin << "," << bc << ");\n";
    }
 
    // save bin errors
    if (fSumw2.fN) {
-      for (bin=1;bin<=GetNumberOfBins();bin++) {
+      for (Int_t bin = 1; bin <= GetNumberOfBins(); bin++) {
          Double_t be = GetBinError(bin);
-         if (be) {
-            out<<"   "<<hname<<"->SetBinError("<<bin<<","<<be<<");"<<std::endl;
-         }
+         if (be)
+            out << "   " << hname << "->SetBinError(" << bin << "," << be << ");\n";
       }
    }
+
    TH1::SavePrimitiveHelp(out, hname, option);
 }
 
@@ -1737,4 +1721,16 @@ Double_t TH2Poly::Interpolate(Double_t, Double_t)
 {
    Error("Interpolate", "Not implemented for TH2Poly");
    return TMath::QuietNaN();
+}
+////////////////////////////////////////////////////////////////////////////////
+/// NOT IMPLEMENTED for TH2Poly
+void TH2Poly::AddBinContent(Int_t)
+{
+   Error("AddBinContent", "Not implemented for TH2Poly");
+}
+////////////////////////////////////////////////////////////////////////////////
+/// NOT IMPLEMENTED for TH2Poly
+void TH2Poly::AddBinContent(Int_t, Double_t)
+{
+   Error("AddBinContent", "Not implemented for TH2Poly");
 }

@@ -71,10 +71,15 @@ class TVirtualIndex;
 class TBranchRef;
 class TBasket;
 class TStreamerInfo;
+class TTree;
 class TTreeCache;
 class TTreeCloner;
 class TFileMergeInfo;
 class TVirtualPerfStats;
+
+namespace ROOT::Internal::TreeUtils {
+void TBranch__SetTree(TTree *tree, TObjArray &branches);
+}
 
 class TTree : public TNamed, public TAttLine, public TAttFill, public TAttMarker {
 
@@ -160,11 +165,17 @@ private:
    mutable std::atomic<Long64_t> fIMTTotBytes;    ///<! Total bytes for the IMT flush baskets
    mutable std::atomic<Long64_t> fIMTZipBytes;    ///<! Zip bytes for the IMT flush baskets.
 
+   std::unordered_map<std::string, TBranch *>
+      fNamesToBranches; ///<! maps names to their branches, useful when retrieving branches by name
+
    void             InitializeBranchLists(bool checkLeafCount);
    void             SortBranchesByTime();
    Int_t            FlushBasketsImpl() const;
    void             MarkEventCluster();
    Long64_t         GetMedianClusterSize();
+
+   void RegisterBranchFullName(std::pair<std::string, TBranch *> &&kv) { fNamesToBranches.insert(kv); }
+   friend void ROOT::Internal::TreeUtils::TBranch__SetTree(TTree *tree, TObjArray &branches);
 
 protected:
    virtual void     KeepCircular();
@@ -209,19 +220,20 @@ protected:
 
    // use to update fFriendLockStatus
    enum ELockStatusBits {
-      kFindBranch        = BIT(0),
-      kFindLeaf          = BIT(1),
-      kGetAlias          = BIT(2),
-      kGetBranch         = BIT(3),
-      kGetEntry          = BIT(4),
-      kGetEntryWithIndex = BIT(5),
-      kGetFriend         = BIT(6),
-      kGetFriendAlias    = BIT(7),
-      kGetLeaf           = BIT(8),
-      kLoadTree          = BIT(9),
-      kPrint             = BIT(10),
-      kRemoveFriend      = BIT(11),
-      kSetBranchStatus   = BIT(12)
+      kFindBranch           = BIT(0),
+      kFindLeaf             = BIT(1),
+      kGetAlias             = BIT(2),
+      kGetBranch            = BIT(3),
+      kGetEntry             = BIT(4),
+      kGetEntryWithIndex    = BIT(5),
+      kGetFriend            = BIT(6),
+      kGetFriendAlias       = BIT(7),
+      kGetLeaf              = BIT(8),
+      kLoadTree             = BIT(9),
+      kPrint                = BIT(10),
+      kRemoveFriend         = BIT(11),
+      kSetBranchStatus      = BIT(12),
+      kResetBranchAddresses = BIT(13)
    };
 
 public:

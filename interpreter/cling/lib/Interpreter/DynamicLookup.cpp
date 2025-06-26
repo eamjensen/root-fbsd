@@ -45,8 +45,7 @@ namespace {
                       Sema* S) :
       m_Policy(Policy), m_Addresses(Addresses), m_Sema(S) {}
 
-    virtual ~StmtPrinterHelper() {}
-
+    ~StmtPrinterHelper() override {}
 
     // Handle only DeclRefExprs since they are local and the call wrapper
     // won't "see" them. Consequently we don't need to handle:
@@ -910,7 +909,7 @@ namespace cling {
   bool EvaluateTSynthesizer::ShouldVisit(FunctionDecl* D) {
     // FIXME: Here we should have our custom attribute.
     if (AnnotateAttr* A = D->getAttr<AnnotateAttr>())
-      if (A->getAnnotation().equals("__ResolveAtRuntime"))
+      if (A->getAnnotation() == "__ResolveAtRuntime")
         return true;
     return false;
   }

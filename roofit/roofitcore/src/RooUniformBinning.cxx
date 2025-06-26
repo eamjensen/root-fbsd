@@ -27,7 +27,7 @@ e.g. the binning of class RooBinning.
 
 #include <RooUniformBinning.h>
 
-#include <RooFit/Detail/CodeSquashContext.h>
+#include <RooFit/CodegenContext.h>
 #include <RooMsgService.h>
 
 #include <Riostream.h>
@@ -35,7 +35,6 @@ e.g. the binning of class RooBinning.
 
 using std::endl;
 
-ClassImp(RooUniformBinning);
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Construct range [xlo,xhi] with 'nBins' bins
@@ -64,7 +63,7 @@ RooUniformBinning::RooUniformBinning(const RooUniformBinning &other, const char 
 void RooUniformBinning::setRange(double xlo, double xhi)
 {
   if (xlo>xhi) {
-    coutE(InputArguments) << "RooUniformBinning::setRange: ERROR low bound > high bound" << endl ;
+    coutE(InputArguments) << "RooUniformBinning::setRange: ERROR low bound > high bound" << std::endl ;
     return ;
   }
 
@@ -99,7 +98,7 @@ double RooUniformBinning::binCenter(Int_t i) const
 {
   if (i<0 || i>=_nbins) {
     coutE(InputArguments) << "RooUniformBinning::binCenter ERROR: bin index " << i
-           << " is out of range (0," << _nbins-1 << ")" << endl ;
+           << " is out of range (0," << _nbins-1 << ")" << std::endl ;
     return 0 ;
   }
 
@@ -126,7 +125,7 @@ double RooUniformBinning::binLow(Int_t i) const
 {
   if (i<0 || i>=_nbins) {
     coutE(InputArguments) << "RooUniformBinning::binLow ERROR: bin index " << i
-           << " is out of range (0," << _nbins-1 << ")" << endl ;
+           << " is out of range (0," << _nbins-1 << ")" << std::endl ;
     return 0 ;
   }
 
@@ -142,7 +141,7 @@ double RooUniformBinning::binHigh(Int_t i) const
 {
   if (i<0 || i>=_nbins) {
     coutE(InputArguments) << "RooUniformBinning::fitBinHigh ERROR: bin index " << i
-           << " is out of range (0," << _nbins-1 << ")" << endl ;
+           << " is out of range (0," << _nbins-1 << ")" << std::endl ;
     return 0 ;
   }
 
@@ -166,7 +165,7 @@ double* RooUniformBinning::array() const
 }
 
 std::string
-RooUniformBinning::translateBinNumber(RooFit::Detail::CodeSquashContext &ctx, RooAbsArg const &var, int coef) const
+RooUniformBinning::translateBinNumber(RooFit::Experimental::CodegenContext &ctx, RooAbsArg const &var, int coef) const
 {
    return ctx.buildCall("RooFit::Detail::MathFuncs::uniformBinNumber", lowBound(), highBound(), var, numBins(), coef);
 }

@@ -28,10 +28,8 @@ operator()(const MnFcn &fcn, const GradientCalculator &, const MnUserParameterSt
    const MnMachinePrecision &prec = st.Precision();
 
    // initial starting values
-   MnAlgebraicVector x(n);
-   for (unsigned int i = 0; i < n; i++)
-      x(i) = st.IntParameters()[i];
-   double fcnmin = fcn(x);
+   MnAlgebraicVector x(st.IntParameters());
+   double fcnmin = MnFcnCaller{fcn}(x);
    MinimumParameters pa(x, fcnmin);
    InitialGradientCalculator igc(fcn, st.Trafo());
    FunctionGradient dgrad = igc(pa);
@@ -44,13 +42,6 @@ operator()(const MnFcn &fcn, const GradientCalculator &, const MnUserParameterSt
    MinimumState state(pa, err, dgrad, edm, fcn.NumOfCalls());
 
    return MinimumSeed(state, st.Trafo());
-}
-
-MinimumSeed SimplexSeedGenerator::operator()(const MnFcn &fcn, const AnalyticalGradientCalculator &gc,
-                                             const MnUserParameterState &st, const MnStrategy &stra) const
-{
-   // base class interface
-   return (*this)(fcn, (const GradientCalculator &)(gc), st, stra);
 }
 
 } // namespace Minuit2

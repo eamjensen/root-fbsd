@@ -36,7 +36,6 @@ in the two sets.
 #include "RooFit/Detail/RooNLLVarNew.h"
 #include "RooMsgService.h"
 #include "RooBatchCompute.h"
-#include "RooFuncWrapper.h"
 
 #ifdef ROOFIT_LEGACY_EVAL_BACKEND
 #include "RooNLLVar.h"
@@ -46,7 +45,6 @@ in the two sets.
 #include <algorithm>
 #include <cmath>
 
-ClassImp(RooAddition);
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -153,37 +151,6 @@ void RooAddition::doEval(RooFit::EvalContext &ctx) const
       coefs.push_back(1.0);
    }
    RooBatchCompute::compute(ctx.config(this), RooBatchCompute::AddPdf, ctx.output(), pdfs, coefs);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-void RooAddition::translate(RooFit::Detail::CodeSquashContext &ctx) const
-{
-   if (_set.empty()) {
-      ctx.addResult(this, "0.0");
-   }
-   std::string result;
-   if (_set.size() > 1)
-      result += "(";
-
-   std::size_t i = 0;
-   for (auto *component : static_range_cast<RooAbsReal *>(_set)) {
-
-      if (!dynamic_cast<RooFit::Detail::RooNLLVarNew *>(component) || _set.size() == 1) {
-         result += ctx.getResult(*component);
-         ++i;
-         if (i < _set.size()) result += '+';
-         continue;
-      }
-      auto &wrp = *ctx._wrapper;
-      auto funcName = wrp.declareFunction(wrp.buildCode(*component));
-      result += funcName + "(params, obs, xlArr)";
-      ++i;
-      if (i < _set.size()) result += '+';
-   }
-   if (_set.size() > 1)
-      result += ')';
-   ctx.addResult(this, result);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -307,6 +307,7 @@ find_program(PERL_EXECUTABLE perl)
 set(perl ${PERL_EXECUTABLE})
 
 find_program(CHROME_EXECUTABLE NAMES chrome.exe chromium chromium-browser chrome chrome-browser google-chrome-stable Google\ Chrome
+             HINTS /snap/bin
              PATH_SUFFIXES "Google/Chrome/Application")
 if(CHROME_EXECUTABLE)
   if(WIN32)
@@ -429,7 +430,7 @@ set(use${compression_default} define)
 
 # cloudflare zlib is available only on x86 and aarch64 platforms with Linux
 # for other platforms we have available builtin zlib 1.2.8
-if(ZLIB_CF)
+if(builtin_zlib AND ZLIB_CF)
   set(usecloudflarezlib define)
 else()
   set(usecloudflarezlib undef)
@@ -459,10 +460,10 @@ if(cefweb)
 else()
   set(hascefweb undef)
 endif()
-if(qt5web)
-  set(hasqt5webengine define)
+if(qt6web)
+  set(hasqt6webengine define)
 else()
-  set(hasqt5webengine undef)
+  set(hasqt6webengine undef)
 endif()
 if (tmva-cpu)
   set(hastmvacpu define)
@@ -603,15 +604,6 @@ string(REGEX REPLACE "(^|[ ]*)-W[^ ]*" "" __cflags "${CMAKE_C_FLAGS}")
 if(MSVC)
   string(REPLACE "-I${CMAKE_SOURCE_DIR}/cmake/win" "" __cxxflags "${__cxxflags}")
   string(REPLACE "-I${CMAKE_SOURCE_DIR}/cmake/win" "" __cflags "${__cflags}")
-endif()
-
-if (cxxmodules)
-  # Re-add the -Wno-module-import-in-extern-c which we just filtered out.
-  # We want it because it changes the module cache hash and causes modules to be
-  # rebuilt.
-  # FIXME: We should review how we do the regex.
-  set(ROOT_CXX_FLAGS "${ROOT_CXX_FLAGS} -Wno-module-import-in-extern-c")
-  set(ROOT_C_FLAGS "${ROOT_C_FLAGS} -Wno-module-import-in-extern-c")
 endif()
 
 string(REGEX REPLACE "(^|[ ]*)-W[^ ]*" "" __fflags "${CMAKE_Fortran_FLAGS}")

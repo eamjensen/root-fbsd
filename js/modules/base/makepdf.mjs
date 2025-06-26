@@ -59,6 +59,8 @@ async function makePDF(svg, args) {
       }
    });
 
+   let pr = Promise.resolve();
+
    if (nodejs) {
       const doc = internals.nodejs_document;
       doc.originalCreateElementNS = doc.createElementNS;
@@ -80,15 +82,15 @@ async function makePDF(svg, args) {
          };
          return res;
       };
+
+      pr = import('canvas').then(handle => {
+         globalThis.Image = handle.Image;
+      });
    }
-
-
-   let doc;
 
    const orientation = (svg.width < svg.height) ? 'portrait' : 'landscape';
 
-   if (args?.as_doc)
-      doc = args?.doc;
+   let doc = args?.as_doc ? args.doc : null;
 
    if (doc) {
       doc.addPage({
@@ -120,10 +122,9 @@ async function makePDF(svg, args) {
       doc.addFont(filename, fcfg.n, fcfg.s || 'normal');
    });
 
-   let pr = Promise.resolve();
    if (need_symbols && !custom_fonts[kSymbol] && settings.LoadSymbolTtf) {
       const handler = new FontHandler(122, 10);
-      pr = handler.load().then(() => {
+      pr = pr.then(() => handler.load()).then(() => {
          handler.addCustomFontToSvg(d3_select(svg.node));
          doc.addFileToVFS(kSymbol + '.ttf', handler.base64);
          doc.addFont(kSymbol + '.ttf', kSymbol, 'normal');
@@ -156,13 +157,14 @@ async function makePDF(svg, args) {
          globalThis.document = undefined;
          globalThis.CSSStyleSheet = undefined;
          globalThis.CSSStyleRule = undefined;
+         globalThis.Image = undefined;
          internals.nodejs_document.createElementNS = internals.nodejs_document.originalCreateElementNS;
-         if (args?.as_buffer) return Buffer.from(res);
+         if (args?.as_buffer)
+            return Buffer.from(res);
       }
 
       return res;
    });
 }
-
 
 export { makePDF };

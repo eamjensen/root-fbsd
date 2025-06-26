@@ -26,11 +26,6 @@ class RCanvasPainter extends RPadPainter {
       this._websocket = null;
       this.tooltip_allowed = settings.Tooltip;
       this.v7canvas = true;
-      if ((dom === null) && (canvas === null)) {
-         // for web canvas details are important
-         settings.SmallPad.width = 20;
-         settings.SmallPad.height = 10;
-      }
    }
 
    /** @summary Cleanup canvas painter */
@@ -300,7 +295,6 @@ class RCanvasPainter extends RPadPainter {
              });
       } else if (msg.slice(0, 4) === 'JSON') {
          const obj = parse(msg.slice(4));
-         // console.log('get JSON ', msg.length-4, obj._typename);
          this.redrawObject(obj);
       } else if (msg.slice(0, 9) === 'REPL_REQ:')
          this.processDrawableReply(msg.slice(9));
@@ -327,8 +321,8 @@ class RCanvasPainter extends RPadPainter {
                   onWebsocketOpened() {
                   },
 
-                  onWebsocketMsg(panel_handle, msg) {
-                     const panel_name = (msg.indexOf('SHOWPANEL:') === 0) ? msg.slice(10) : '';
+                  onWebsocketMsg(panel_handle, msg2) {
+                     const panel_name = (msg2.indexOf('SHOWPANEL:') === 0) ? msg2.slice(10) : '';
                      this.cpainter.showUI5Panel(panel_name, panel_handle)
                                   .then(res => handle.send(reply + (res ? 'true' : 'false')));
                   },
@@ -358,8 +352,8 @@ class RCanvasPainter extends RPadPainter {
          this.drawProjection(kind, hist);
       } else if (msg.slice(0, 5) === 'SHOW:') {
          const that = msg.slice(5),
-             on = that[that.length-1] === '1';
-         this.showSection(that.slice(0, that.length-2), on);
+             on = that.at(-1) === '1';
+         this.showSection(that.slice(0, that.length - 2), on);
       } else
          console.log(`unrecognized msg len: ${msg.length} msg: ${msg.slice(0, 30)}`);
    }
@@ -407,8 +401,6 @@ class RCanvasPainter extends RPadPainter {
          if (!this._submreq) this._submreq = {};
          this._submreq[req.reqid] = req; // fast access to submitted requests
       }
-
-      // console.log('Sending request ', msg.slice(0,60));
 
       this.sendWebsocket('REQ:' + msg);
       return req;
@@ -785,15 +777,20 @@ registerMethods(`${nsREX}RPalette`, {
 
    getContourIndex(zc) {
       const cntr = this.fContour;
-      let l = 0, r = cntr.length-1, mid;
+      let l = 0, r = cntr.length - 1;
 
-      if (zc < cntr[0]) return -1;
-      if (zc >= cntr[r]) return r-1;
+      if (zc < cntr[0])
+         return -1;
+      if (zc >= cntr[r])
+         return r-1;
 
       if (this.fCustomContour) {
          while (l < r-1) {
-            mid = Math.round((l+r)/2);
-            if (cntr[mid] > zc) r = mid; else l = mid;
+            const mid = Math.round((l+r)/2);
+            if (cntr[mid] > zc)
+               r = mid;
+            else
+               l = mid;
          }
          return l;
       }
@@ -869,7 +866,7 @@ registerMethods(`${nsREX}RPalette`, {
       // TODO: implement better way to find index
 
       let entry, next = this.fColors[0];
-      for (let indx = 0; indx < this.fColors.length-1; ++indx) {
+      for (let indx = 0; indx < this.fColors.length - 1; ++indx) {
          entry = next;
 
          if (Math.abs(entry.fOrdinal - value) < 0.0001)

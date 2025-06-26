@@ -9,6 +9,7 @@
  *************************************************************************/
 
 #include <ROOT/RDataSource.hxx>
+#include <ROOT/RTTreeDS.hxx>
 #include <ROOT/RDF/InterfaceUtils.hxx>
 #include <ROOT/RDF/RColumnRegister.hxx>
 #include <ROOT/RDF/RDisplay.hxx>
@@ -931,10 +932,9 @@ ColumnNames_t GetValidatedColumnNames(RLoopManager &lm, const unsigned int nColu
       // Look for a possible overlap between the unknown columns and the
       // columns we should ignore for the purpose of the following exception
       std::set<std::string> intersection;
-      auto colsToIgnore = lm.GetSuppressErrorsForMissingBranches();
+      const auto &colsToIgnore = lm.GetSuppressErrorsForMissingBranches();
       std::sort(unknownColumns.begin(), unknownColumns.end());
-      std::sort(colsToIgnore.begin(), colsToIgnore.end());
-      std::set_intersection(unknownColumns.begin(), unknownColumns.end(), colsToIgnore.begin(), colsToIgnore.end(),
+      std::set_intersection(unknownColumns.cbegin(), unknownColumns.cend(), colsToIgnore.cbegin(), colsToIgnore.cend(),
                             std::inserter(intersection, intersection.begin()));
       if (intersection.empty()) {
          std::string errMsg = std::string("Unknown column") + (unknownColumns.size() > 1 ? "s: " : ": ");
@@ -998,16 +998,19 @@ void CheckForDuplicateSnapshotColumns(const ColumnNames_t &cols)
 /// Return copies of colsWithoutAliases and colsWithAliases with size branches for variable-sized array branches added
 /// in the right positions (i.e. before the array branches that need them).
 std::pair<std::vector<std::string>, std::vector<std::string>>
-AddSizeBranches(const std::vector<std::string> &branches, TTree *tree, std::vector<std::string> &&colsWithoutAliases,
-                std::vector<std::string> &&colsWithAliases)
+AddSizeBranches(const std::vector<std::string> &branches, ROOT::RDF::RDataSource *ds,
+                std::vector<std::string> &&colsWithoutAliases, std::vector<std::string> &&colsWithAliases)
 {
+   TTree *tree{};
+   if (auto treeDS = dynamic_cast<ROOT::Internal::RDF::RTTreeDS *>(ds))
+      tree = treeDS->GetTree();
    if (!tree) // nothing to do
       return {std::move(colsWithoutAliases), std::move(colsWithAliases)};
 
    assert(colsWithoutAliases.size() == colsWithAliases.size());
 
    auto nCols = colsWithoutAliases.size();
-   // Use index-iteration as we modify the vector during the iteration. 
+   // Use index-iteration as we modify the vector during the iteration.
    for (std::size_t i = 0u; i < nCols; ++i) {
       const auto &colName = colsWithoutAliases[i];
       if (!IsStrInVec(colName, branches))
@@ -1044,6 +1047,23 @@ void RemoveDuplicates(ColumnNames_t &columnNames)
       columnNames.end());
 }
 
+void RemoveRNTupleSubFields(ColumnNames_t &columnNames)
+{
+   ColumnNames_t parentFields;
+
+   std::copy_if(columnNames.cbegin(), columnNames.cend(), std::back_inserter(parentFields),
+                [](const std::string &colName) { return colName.find('.') == std::string::npos; });
+
+   columnNames.erase(std::remove_if(columnNames.begin(), columnNames.end(),
+                                    [&parentFields](const std::string &colName) {
+                                       if (colName.find('.') == std::string::npos)
+                                          return false;
+                                       const auto parentFieldName = colName.substr(0, colName.find_first_of('.'));
+                                       return std::find(parentFields.cbegin(), parentFields.cend(), parentFieldName) !=
+                                              parentFields.end();
+                                    }),
+                     columnNames.end());
+}
 } // namespace RDF
 } // namespace Internal
 } // namespace ROOT

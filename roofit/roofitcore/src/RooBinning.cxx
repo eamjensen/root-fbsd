@@ -30,7 +30,7 @@ uniformly spaced boundaries.
 #include <RooAbsPdf.h>
 #include <RooBinning.h>
 #include <RooDouble.h>
-#include <RooFit/Detail/CodeSquashContext.h>
+#include <RooFit/CodegenContext.h>
 #include <RooFit/Detail/MathFuncs.h>
 #include <RooMsgService.h>
 #include <RooNumber.h>
@@ -44,7 +44,6 @@ uniformly spaced boundaries.
 
 using std::endl;
 
-ClassImp(RooBinning);
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -205,7 +204,7 @@ double* RooBinning::array() const
 void RooBinning::setRange(double xlo, double xhi)
 {
   if (xlo > xhi) {
-    coutE(InputArguments) << "RooBinning::setRange: ERROR low bound > high bound" << endl;
+    coutE(InputArguments) << "RooBinning::setRange: ERROR low bound > high bound" << std::endl;
     return;
   }
   // Remove previous boundaries
@@ -242,7 +241,7 @@ void RooBinning::updateBinCount()
 bool RooBinning::binEdges(Int_t bin, double& xlo, double& xhi) const
 {
   if (0 > bin || bin >= _nbins) {
-    coutE(InputArguments) << "RooBinning::binEdges ERROR: bin number must be in range (0," << _nbins << ")" << endl;
+    coutE(InputArguments) << "RooBinning::binEdges ERROR: bin number must be in range (0," << _nbins << ")" << std::endl;
     return true;
   }
   xlo = _boundaries[bin + _blo], xhi = _boundaries[bin + _blo + 1];
@@ -346,7 +345,7 @@ void RooBinning::Streamer(TBuffer &R__b)
    }
 }
 
-std::string RooBinning::translateBinNumber(RooFit::Detail::CodeSquashContext &ctx, RooAbsArg const &var, int coef) const
+std::string RooBinning::translateBinNumber(RooFit::Experimental::CodegenContext &ctx, RooAbsArg const &var, int coef) const
 {
    return ctx.buildCall("RooFit::Detail::MathFuncs::binNumber", var, coef, _boundaries, _boundaries.size(), _nbins, _blo);
 }

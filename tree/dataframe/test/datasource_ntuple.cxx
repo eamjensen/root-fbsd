@@ -9,15 +9,16 @@
 #include <NTupleStruct.hxx>
 
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include "ClassWithArrays.h"
 
 #include <limits>
 
-using ROOT::Experimental::RNTupleDS;
-using ROOT::Experimental::RNTupleModel;
-using ROOT::Experimental::RNTupleWriter;
-using ROOT::Experimental::Internal::RPageSource;
+using ROOT::RNTupleModel;
+using ROOT::RNTupleWriter;
+using ROOT::Internal::RPageSource;
+using ROOT::RDF::RNTupleDS;
 
 namespace {
 
@@ -51,15 +52,15 @@ protected:
 
    void SetUp() override {
       auto model = RNTupleModel::Create();
-      model->MakeField<float>("pt", 42.0);
-      model->MakeField<float>("energy", 7.0);
-      model->MakeField<std::string>("tag", "xyz");
-      model->MakeField<std::vector<float>>("jets", std::vector<float>{1.f, 2.f});
+      *model->MakeField<float>("pt") = 42;
+      *model->MakeField<float>("energy") = 7;
+      *model->MakeField<std::string>("tag") = "xyz";
+      *model->MakeField<std::vector<float>>("jets") = std::vector<float>{1.f, 2.f};
       auto fldNnlo = model->MakeField<std::vector<std::vector<float>>>("nnlo");
       fldNnlo->push_back(std::vector<float>());
       fldNnlo->push_back(std::vector<float>{1.0});
       fldNnlo->push_back(std::vector<float>{1.0, 2.0, 4.0, 8.0});
-      model->MakeField<ROOT::RVecI>("rvec", ROOT::RVecI{1, 2, 3});
+      *model->MakeField<ROOT::RVecI>("rvec") = ROOT::RVecI{1, 2, 3};
       auto fldElectron = model->MakeField<Electron>("electron");
       fldElectron->pt = 137.0;
       auto fldVecElectron = model->MakeField<std::vector<Electron>>("VecElectron");
@@ -99,6 +100,13 @@ TEST_F(RNTupleDSTest, ColTypeNames)
    EXPECT_STREQ("float", ds.GetTypeName("energy").c_str());
    EXPECT_STREQ("std::size_t", ds.GetTypeName("R_rdf_sizeof_jets").c_str());
    EXPECT_STREQ("ROOT::VecOps::RVec<std::int32_t>", ds.GetTypeName("rvec").c_str());
+
+   try {
+      ds.GetTypeName("Address");
+      FAIL() << "should not be able to get a type for a non-existent column";
+   } catch (const std::runtime_error &err) {
+      EXPECT_THAT(err.what(), testing::HasSubstr("RNTupleDS: There is no column with name \"Address\""));
+   }
 }
 
 TEST_F(RNTupleDSTest, NFiles)
@@ -110,7 +118,7 @@ TEST_F(RNTupleDSTest, NFiles)
 
 TEST_F(RNTupleDSTest, CardinalityColumn)
 {
-   auto df = ROOT::RDF::Experimental::FromRNTuple(fNtplName, fFileName);
+   auto df = ROOT::RDF::FromRNTuple(fNtplName, fFileName);
 
    // Check that the special column #<collection> works without jitting...
    auto identity = [](std::size_t sz) { return sz; };
@@ -134,7 +142,7 @@ TEST_F(RNTupleDSTest, CardinalityColumn)
 
 static void ReadTest(const std::string &name, const std::string &fname)
 {
-   auto df = ROOT::RDF::Experimental::FromRNTuple(name, fname);
+   auto df = ROOT::RDF::FromRNTuple(name, fname);
 
    auto count = df.Count();
    auto sumpt = df.Sum<float>("pt");
@@ -302,6 +310,215 @@ TEST_F(RNTupleDSTest, ChainTailScheduling)
 }
 #endif
 
+TEST_F(RNTupleDSTest, ModifyColumnValues)
+{
+   auto df = ROOT::RDF::FromRNTuple(fNtplName, fFileName);
+   auto dfCorrected =
+      df.Define("jetsCorrected",
+                [](ROOT::RVec<float> &jets) {
+                   for (auto &jet : jets) {
+                      jet *= 1.1;
+                   }
+                   return jets;
+                },
+                {"jets"})
+         .Define("jetsFiltered", [](const ROOT::RVec<float> &jets) { return jets[jets <= 2.f]; }, {"jetsCorrected"});
+
+   ROOT::RVec<float> jetsExpected{1.f, 2.f};
+   ROOT::RVec<float> jetsCorrectedExpected{1.1f, 2.2f};
+   ROOT::RVec<float> jetsFilteredExpected{1.1f};
+
+   // In the same action, we expect "jets" and "jetsCorrected" to be equal, with the modified values after the first
+   // "Define", because "jets" is modified in-place here.
+   dfCorrected.Foreach(
+      [&jetsCorrectedExpected, &jetsFilteredExpected](const ROOT::RVec<float> &jets, const ROOT::RVec<float> &jetsC,
+                                                      const ROOT::RVec<float> &jetsF) {
+         EXPECT_VEC_EQ(jetsCorrectedExpected, jets);
+         EXPECT_VEC_EQ(jets, jetsC);
+         EXPECT_VEC_EQ(jetsFilteredExpected, jetsF);
+      },
+      {"jets", "jetsCorrected", "jetsFiltered"});
+
+   // Even though "jetsCorrected" is not used, "jets" should still be modified because "jetsFiltered" is defined from
+   // "jetsCorrected".
+   dfCorrected.Foreach(
+      [&jetsCorrectedExpected, &jetsFilteredExpected](const ROOT::RVec<float> &jets, const ROOT::RVec<float> &jetsF) {
+         EXPECT_VEC_EQ(jetsCorrectedExpected, jets);
+         EXPECT_VEC_EQ(jetsFilteredExpected, jetsF);
+      },
+      {"jets", "jetsFiltered"});
+
+   // In separate actions, we expect "jets" to have its original on-disk value, but "jetsCorrected" (and by
+   // extension, "jetsFiltered") to have the modified values.
+   auto jets = dfCorrected.Take<ROOT::RVec<float>>("jets").GetValue();
+   auto jetsCorrected = dfCorrected.Take<ROOT::RVec<float>>("jetsCorrected").GetValue();
+   auto jetsFiltered = dfCorrected.Take<ROOT::RVec<float>>("jetsFiltered").GetValue();
+
+   ASSERT_EQ(1ull, jets.size());
+   ASSERT_EQ(1ull, jetsCorrected.size());
+   ASSERT_EQ(1ull, jetsFiltered.size());
+   EXPECT_VEC_EQ(jetsExpected, jets[0]);
+   EXPECT_VEC_EQ(jetsCorrectedExpected, jetsCorrected[0]);
+   EXPECT_VEC_EQ(jetsFilteredExpected, jetsFiltered[0]);
+}
+
+TEST(RNTupleDS, CollectionFieldTypes)
+{
+   // NB: The other tests already cover std::vector and std::array (and nestings thereof).
+   FileRAII fileGuard{"RNTupleDS_test_collection_field_types.root"};
+   {
+      auto model = RNTupleModel::Create();
+      *model->MakeField<std::set<int>>("intSet") = std::set<int>{3, 1, 2};
+      *model->MakeField<std::set<Electron>>("electronSet") =
+         std::set<Electron>{Electron{1.f}, Electron{2.f}, Electron{3.f}};
+      *model->MakeField<std::set<std::vector<Electron>>>("electronSetVec") =
+         std::set<std::vector<Electron>>{{Electron{1.f}, Electron{2.f}}, {Electron{3.f}}};
+      *model->MakeField<std::set<std::set<Electron>>>("electronSetSet") =
+         std::set<std::set<Electron>>{{Electron{1.f}, Electron{2.f}}, {Electron{3.f}}};
+
+      // Untyped collection
+      auto fldJetPt = ROOT::RVectorField::CreateUntyped("jet_pt", std::make_unique<ROOT::RField<float>>("_0"));
+      model->AddField(std::move(fldJetPt));
+
+      // Untyped collection with an untyped record, with a projection
+      std::vector<std::unique_ptr<ROOT::RFieldBase>> muon;
+      muon.emplace_back(std::make_unique<ROOT::RField<float>>("muon_pt"));
+      auto fldMuonRecord = std::make_unique<ROOT::RRecordField>("_0", std::move(muon));
+      auto fldMuons = ROOT::RVectorField::CreateUntyped("muon", std::move(fldMuonRecord));
+      model->AddField(std::move(fldMuons));
+      auto muonPtField = ROOT::RFieldBase::Create("muon_pt", "ROOT::VecOps::RVec<float>").Unwrap();
+      model->AddProjectedField(std::move(muonPtField), [](const std::string &fieldName) {
+         if (fieldName == "muon_pt")
+            return "muon";
+         else
+            return "muon._0.muon_pt";
+      });
+
+      auto ntuple = RNTupleWriter::Recreate(std::move(model), "ntuple", fileGuard.GetPath());
+      ntuple->Fill();
+   }
+
+   RNTupleDS ds("ntuple", fileGuard.GetPath());
+
+   auto colNames = ds.GetColumnNames();
+
+   ASSERT_EQ(20, colNames.size());
+
+   EXPECT_TRUE(ds.HasColumn("intSet"));
+   EXPECT_TRUE(ds.HasColumn("R_rdf_sizeof_intSet"));
+   EXPECT_TRUE(ds.HasColumn("electronSet"));
+   EXPECT_TRUE(ds.HasColumn("R_rdf_sizeof_electronSet"));
+   EXPECT_TRUE(ds.HasColumn("electronSet.pt"));
+   EXPECT_TRUE(ds.HasColumn("R_rdf_sizeof_electronSet.pt"));
+   EXPECT_TRUE(ds.HasColumn("jet_pt"));
+   EXPECT_TRUE(ds.HasColumn("R_rdf_sizeof_jet_pt"));
+   EXPECT_TRUE(ds.HasColumn("muon_pt"));
+   EXPECT_TRUE(ds.HasColumn("R_rdf_sizeof_muon_pt"));
+   EXPECT_TRUE(ds.HasColumn("muon.muon_pt"));
+   EXPECT_TRUE(ds.HasColumn("R_rdf_sizeof_muon.muon_pt"));
+
+   EXPECT_STREQ("std::set<std::int32_t>", ds.GetTypeName("intSet").c_str());
+   EXPECT_STREQ("std::set<Electron>", ds.GetTypeName("electronSet").c_str());
+   EXPECT_STREQ("ROOT::VecOps::RVec<float>", ds.GetTypeName("electronSet.pt").c_str());
+   EXPECT_STREQ("std::set<std::set<Electron>>", ds.GetTypeName("electronSetSet").c_str());
+   EXPECT_STREQ("ROOT::VecOps::RVec<ROOT::VecOps::RVec<float>>", ds.GetTypeName("electronSetSet.pt").c_str());
+   // TODO(fdegeus) figure out how to (cleanly) still add inner vectors etc. as RVecs.
+   EXPECT_STREQ("std::set<std::vector<Electron>>", ds.GetTypeName("electronSetVec").c_str());
+   EXPECT_STREQ("ROOT::VecOps::RVec<float>", ds.GetTypeName("jet_pt").c_str());
+   EXPECT_STREQ("ROOT::VecOps::RVec<float>", ds.GetTypeName("muon_pt").c_str());
+   EXPECT_STREQ(ds.GetTypeName("muon.muon_pt").c_str(), ds.GetTypeName("muon_pt").c_str());
+}
+
+TEST_F(RNTupleDSTest, AlternativeColumnTypes)
+{
+   auto df = ROOT::RDF::FromRNTuple(fNtplName, fFileName);
+
+   // Alternative inner type
+   auto usingDouble = df.Define("nJets", [](const ROOT::RVec<double> &jets) { return jets.size(); }, {"jets"})
+                         .Take<std::size_t, ROOT::RVec<std::size_t>>("nJets")
+                         .GetValue();
+   EXPECT_EQ(2ull, ROOT::VecOps::Sum(usingDouble));
+
+   // Alternative outer type (original on-disk type)
+   auto asStdVec = df.Define("nJets", [](const std::vector<float> &jets) { return jets.size(); }, {"jets"})
+                      .Take<std::size_t, ROOT::RVec<std::size_t>>("nJets")
+                      .GetValue();
+   EXPECT_EQ(2ull, ROOT::VecOps::Sum(asStdVec));
+
+   // Original datasource protofield type
+   auto asRVec = df.Define("nJets", [](const ROOT::RVec<float> &jets) { return jets.size(); }, {"jets"})
+                    .Take<std::size_t, ROOT::RVec<std::size_t>>("nJets")
+                    .GetValue();
+   EXPECT_EQ(2ull, ROOT::VecOps::Sum(asRVec));
+
+   auto multipleAlternativeTypes =
+      df.Define("nJets", [](const std::vector<float> &jets) { return jets.size(); }, {"jets"})
+         .Define("smallestJet", [](const std::set<float> &jets) { return *(jets.begin()); }, {"jets"})
+         .Min<float>("smallestJet")
+         .GetValue();
+   EXPECT_FLOAT_EQ(1.f, multipleAlternativeTypes);
+
+   auto jitted = df.Define("jetsType", "ROOT::Internal::RDF::TypeID2TypeName(typeid(jets))")
+                    .Take<std::string>("jetsType")
+                    .GetValue();
+   EXPECT_EQ("ROOT::VecOps::RVec<float>", jitted[0]);
+
+   // Original protofield type of ROOT::RVec<ROOT::RVec<float>>, test with different ROOT::RVec/std::vector combinations
+   auto nestedStdVecStdVec =
+      df.Define("nNnlo", [](const std::vector<std::vector<float>> &nnlo) { return nnlo.size(); }, {"nnlo"})
+         .Take<std::size_t, ROOT::RVec<std::size_t>>("nNnlo")
+         .GetValue();
+   EXPECT_EQ(3ull, ROOT::VecOps::Sum(nestedStdVecStdVec));
+
+   auto nestedStdVecRVec =
+      df.Define("nNnlo", [](const std::vector<ROOT::RVec<float>> &nnlo) { return nnlo.size(); }, {"nnlo"})
+         .Take<std::size_t, ROOT::RVec<std::size_t>>("nNnlo")
+         .GetValue();
+   EXPECT_EQ(3ull, ROOT::VecOps::Sum(nestedStdVecRVec));
+
+   auto nestedRVecStdVec =
+      df.Define("nNnlo", [](const ROOT::RVec<std::vector<float>> &nnlo) { return nnlo.size(); }, {"nnlo"})
+         .Take<std::size_t, ROOT::RVec<std::size_t>>("nNnlo")
+         .GetValue();
+   EXPECT_EQ(3ull, ROOT::VecOps::Sum(nestedRVecStdVec));
+
+   // Check that the ROOT RtypesCore typedefs are handled properly
+   auto usingTypeAlias1 = df.Define("nJets", [](const std::vector<Float_t> &jets) { return jets.size(); }, {"jets"})
+                             .Take<std::size_t, ROOT::RVec<std::size_t>>("nJets")
+                             .GetValue();
+   EXPECT_EQ(2ull, ROOT::VecOps::Sum(usingTypeAlias1));
+
+   auto usingTypeAlias2 =
+      df.Define("vecSum", [](const ROOT::RVec<Int_t> &rvec) { return ROOT::VecOps::Sum(rvec); }, {"rvec"})
+         .Take<std::int32_t>("vecSum")
+         .GetValue();
+   EXPECT_EQ(6, usingTypeAlias2[0]);
+
+   try {
+      // Invalid outer field type
+      auto dfInvalid = ROOT::RDF::FromRNTuple(fNtplName, fFileName);
+      dfInvalid.Define("firstJet", [](const std::pair<float, float> &jets) { return jets.first; }, {"jets"})
+         .Take<float, ROOT::RVec<float>>("firstJet")
+         .GetValue();
+      FAIL() << "specifying templated actions with incompatible column types should throw";
+   } catch (const std::runtime_error &err) {
+      EXPECT_THAT(err.what(), testing::HasSubstr("RNTupleDS: invalid type \"std::pair<float,float>\" for column "
+                                                 "\"jets\" with on-disk type \"std::vector<float>\""));
+   }
+
+   try {
+      // Invalid inner field types
+      auto dfInvalid = ROOT::RDF::FromRNTuple(fNtplName, fFileName);
+      dfInvalid.Define("nJets", [](const std::vector<std::uint64_t> &jets) { return jets.size(); }, {"jets"})
+         .Take<std::size_t, ROOT::RVec<std::size_t>>("nJets")
+         .GetValue();
+      FAIL() << "specifying templated actions with incompatible column types should throw";
+   } catch (const std::runtime_error &err) {
+      EXPECT_THAT(err.what(), testing::HasSubstr("RNTupleDS: invalid type \"std::vector<std::uint64_t>\" for column "
+                                                 "\"jets\" with on-disk type \"std::vector<float>\""));
+   }
+}
+
 const static std::array<ROOT::RVec<std::array<ROOT::RVecI, 3>>, 3> arraysDatasetCol4El{
    ROOT::RVec<std::array<ROOT::RVecI, 3>>{
       {ROOT::RVecI{1, 2}, ROOT::RVecI{4, 5, 6}, ROOT::RVecI{42, 43, 44, 45}},
@@ -368,7 +585,7 @@ void ReadArraysTest(const std::string &name, const std::string &fname)
 {
    // These tests use the columns that contain std::array data on disk as RVecs
    // reading them into RVecs and checking their values.
-   auto df = ROOT::RDF::Experimental::FromRNTuple(name, fname);
+   auto df = ROOT::RDF::FromRNTuple(name, fname);
 
    auto count = df.Count();
 
@@ -479,7 +696,7 @@ void UseArraysAsRVec(const std::string &name, const std::string &fname)
 {
    // These tests use the columns that contain std::array data on disk as RVecs
    // passing them as arguments to functions that expect RVecs.
-   auto df = ROOT::RDF::Experimental::FromRNTuple(name, fname);
+   auto df = ROOT::RDF::FromRNTuple(name, fname);
 
    auto df1 = df.Define("col1_short", [](const ROOT::RVecI &arr) { return ROOT::VecOps::Take(arr, 2); }, {"col1_arr"});
    auto take1 = df1.Take<ROOT::RVecI>("col1_short");
@@ -517,7 +734,7 @@ void UseArraySizeColumn(const std::string &name, const std::string &fname)
 {
    // These tests use the columns that contain std::array data on disk as RVecs
    // checking the size of the collection with the R_rdf_sizeof_* columns
-   auto df = ROOT::RDF::Experimental::FromRNTuple(name, fname);
+   auto df = ROOT::RDF::FromRNTuple(name, fname);
 
    auto sizeOfCol1 = df.Take<std::size_t>("R_rdf_sizeof_col1_arr");
    // Use # here to exercise that too
@@ -569,3 +786,24 @@ TEST_F(RNTupleDSArraysDataset, UseArraySizeColumnMT)
    UseArraySizeColumn(fNtplName, fFileName);
 }
 #endif
+
+TEST(RNTupleDS, TDirectory)
+{
+   FileRAII fileGuard("test_rntupleds_tdirectoryfile.root");
+   {
+      auto file = std::unique_ptr<TFile>(TFile::Open(fileGuard.GetPath().c_str(), "RECREATE"));
+      auto dir = std::unique_ptr<TDirectory>(file->mkdir("a/b"));
+      auto model = RNTupleModel::Create();
+      auto fldX = model->MakeField<float>("x");
+      auto ntuple = RNTupleWriter::Append(std::move(model), "ntuple", *dir);
+
+      for (unsigned i = 0; i < 5; ++i) {
+         *fldX = static_cast<float>(i);
+         ntuple->Fill();
+      }
+   }
+
+   RNTupleDS ds("a/b/ntuple", fileGuard.GetPath());
+   EXPECT_EQ(1ull, ds.GetNFiles());
+   EXPECT_EQ(std::vector<std::string>{"x"}, ds.GetColumnNames());
+}

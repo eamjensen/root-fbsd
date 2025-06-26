@@ -397,11 +397,12 @@ TGenCollectionProxy::Value::Value(const std::string& inside_type, Bool_t silent,
             } else {
                fSize = fundType->Size();
             }
-         } else if (TEnum::GetEnum( intype.c_str(), TEnum::kNone) ) {
+         } else if (auto e = TEnum::GetEnum(intype.c_str(), TEnum::kNone)) {
+            R__ASSERT(e->IsValid());
             // This is a known enum.
             fCase = kIsEnum;
-            fSize = sizeof(Int_t);
-            fKind = kInt_t;
+            fSize = TDataType::GetDataType(e->GetUnderlyingType())->Size();
+            fKind = e->GetUnderlyingType();
             if (isPointer) {
                fCase |= kIsPointer;
                fSize = sizeof(void*);
@@ -578,6 +579,7 @@ TGenCollectionProxy::TGenCollectionProxy(const TGenCollectionProxy& copy)
    fKey            = copy.fKey   ? new Value(*copy.fKey)   : 0;
    fOnFileClass    = copy.fOnFileClass;
    fReadMemberWise = new TObjArray(TCollection::kInitCapacity,-1);
+   fReadMemberWise->SetOwner(true);
    fConversionReadMemberWise = 0;
    fWriteMemberWise = 0;
    fProperties     = copy.fProperties;
@@ -624,6 +626,7 @@ TGenCollectionProxy::TGenCollectionProxy(Info_t info, size_t iter_size)
             (Long_t)sizeof(e.fIterator));
    }
    fReadMemberWise = new TObjArray(TCollection::kInitCapacity,-1);
+   fReadMemberWise->SetOwner(true);
    fConversionReadMemberWise   = 0;
    fWriteMemberWise            = 0;
    fFunctionCreateIterators    = 0;
@@ -675,6 +678,7 @@ TGenCollectionProxy::TGenCollectionProxy(const ROOT::Detail::TCollectionProxyInf
             (Long_t)sizeof(e.fIterator));
    }
    fReadMemberWise = new TObjArray(TCollection::kInitCapacity,-1);
+   fReadMemberWise->SetOwner(true);
    fConversionReadMemberWise   = 0;
    fWriteMemberWise            = 0;
    fFunctionCreateIterators    = info.fCreateIterators;
@@ -1514,13 +1518,8 @@ void TGenCollectionProxy__VectorCreateIterators(void *obj, void **begin_arena, v
       *end_arena = 0;
       return;
    }
-   *begin_arena = &(*vec->begin());
-#ifdef R__VISUAL_CPLUSPLUS
-   *end_arena = &(*(vec->end()-1)) + 1; // On windows we can not dererence the end iterator at all.
-#else
-   // coverity[past_the_end] Safe on other platforms
-   *end_arena = &(*vec->end());
-#endif
+   *begin_arena = vec->data();
+   *end_arena = vec->data() + vec->size();
 
 }
 

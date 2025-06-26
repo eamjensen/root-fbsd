@@ -24,7 +24,7 @@
 #include "TString.h"
 #include "TApplication.h"
 #include "TTimer.h"
-#include "TRandom.h"
+#include "TRandom3.h"
 #include "TError.h"
 #include "TROOT.h"
 #include "TEnv.h"
@@ -534,13 +534,13 @@ bool RWebWindowsManager::CreateServer(bool with_http)
    if ((http_timer > 0) && !IsUseHttpThread())
       fServer->SetTimer(http_timer);
 
+   TRandom3 rnd;
+
    if (http_port < 0) {
       ntry = 0;
    } else {
-
       if (http_port == 0)
-         gRandom->SetSeed(0);
-
+         rnd.SetSeed(0);
       if (http_max - http_min < ntry)
          ntry = http_max - http_min;
    }
@@ -558,7 +558,7 @@ bool RWebWindowsManager::CreateServer(bool with_http)
             return false;
          }
 
-         http_port = (int)(http_min + (http_max - http_min) * gRandom->Rndm(1));
+         http_port = (int)(http_min + (http_max - http_min) * rnd.Rndm(1));
       }
 
       TString engine, url;
@@ -649,7 +649,7 @@ std::shared_ptr<RWebWindow> RWebWindowsManager::CreateWindow()
 
    auto wshandler = win->CreateWSHandler(Instance(), ++fIdCnt, dflt_tmout);
 
-   if (gEnv->GetValue("WebGui.RecordData", 0) > 0) {
+   if (RWebWindowWSHandler::GetBoolEnv("WebGui.RecordData") > 0) {
       std::string fname, prefix;
       if (fIdCnt > 1) {
          prefix = std::string("f") + std::to_string(fIdCnt) + "_";
@@ -756,13 +756,14 @@ std::string RWebWindowsManager::GetUrl(RWebWindow &win, bool remote, std::string
 /// As display args one can use string like "firefox" or "chrome" - these are two main supported web browsers.
 /// See RWebDisplayArgs::SetBrowserKind() for all available options. Default value for the browser can be configured
 /// when starting root with --web argument like: "root --web=chrome". When root started in web server mode "root --web=server",
-/// no any web browser will be started - just URL will be printout, which can be entered in any running web browser
+/// no web browser will be started - just the URL will be printed, which can be opened in any running web browser.
+/// Also configurable via ROOT_WEBDISPLAY environment variable taking the same options.
 ///
 /// If allowed, same window can be displayed several times (like for RCanvas or TCanvas)
 ///
 /// Following parameters can be configured in rootrc file:
 ///
-///      WebGui.Display: kind of display like chrome or firefox or browser, can be overwritten by --web=value command line argument
+///      WebGui.Display: kind of display, identical to --web option and ROOT_WEBDISPLAY environment variable documented above
 ///      WebGui.OnetimeKey: if configured requires unique key every time window is connected (default yes)
 ///      WebGui.SingleConnMode: if configured the only connection and the only user of any widget is possible (default yes)
 ///      WebGui.Chrome: full path to Google Chrome executable
@@ -774,12 +775,14 @@ std::string RWebWindowsManager::GetUrl(RWebWindow &win, bool remote, std::string
 ///      WebGui.FirefoxInteractive: command to start Firefox in interactive mode, like "$prog --private-window \'$url\' &"
 ///      WebGui.FirefoxProfile: name of Firefox profile to use
 ///      WebGui.FirefoxProfilePath: file path to Firefox profile
-///      WebGui.FirefoxRandomProfile: usage of random Firefox profile -1 never, 0 - only for headless mode (dflt), 1 - always
+///      WebGui.FirefoxRandomProfile: usage of random Firefox profile "no" - disabled, "yes" - enabled (default)
 ///      WebGui.LaunchTmout: time required to start process in seconds (default 30 s)
+///      WebGui.CefTimer: periodic time to run CEF event loop (default 10 ms)
+///      WebGui.CefUseViews: "yes" - enable / "no" - disable usage of CEF views frameworks (default is platform/version dependent)
 ///      WebGui.OperationTmout: time required to perform WebWindow operation like execute command or update drawings
-///      WebGui.RecordData: if specified enables data recording for each web window 0 - off, 1 - on
+///      WebGui.RecordData: if specified enables data recording for each web window; "yes" or "no" (default)
 ///      WebGui.JsonComp: compression factor for JSON conversion, if not specified - each widget uses own default values
-///      WebGui.ForceHttp: 0 - off (default), 1 - always create real http server to run web window
+///      WebGui.ForceHttp: "no" (default), "yes" - always create real http server to run web window
 ///      WebGui.Console: -1 - output only console.error(), 0 - add console.warn(), 1  - add console.log() output
 ///      WebGui.ConnCredits: 10 - number of packets which can be send by server or client without acknowledge from receiving side
 ///      WebGui.openui5src: alternative location for openui5 like https://openui5.hana.ondemand.com/1.128.0/
@@ -821,7 +824,7 @@ unsigned RWebWindowsManager::ShowWindow(RWebWindow &win, const RWebDisplayArgs &
    }
 
    bool normal_http = RWebDisplayHandle::NeedHttpServer(args);
-   if (!normal_http && (gEnv->GetValue("WebGui.ForceHttp", 0) == 1))
+   if (!normal_http && (RWebWindowWSHandler::GetBoolEnv("WebGui.ForceHttp") > 0))
       normal_http = true;
 
    std::string key;

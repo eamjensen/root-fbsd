@@ -57,15 +57,30 @@ set(DIR_PERMISSIONS DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE G
 # Before setting ROOTSYS, make sure that the environment isn't polluted by a different
 # ROOT build. This is significant e,g. for roottest, which will otherwise have libraries
 # of a different ROOT build available / visible / reachable.
-if(NOT $ENV{ROOTSYS} STREQUAL "")
-  string(REPLACE "$ENV{ROOTSYS}/bin" "" ENV_PATH "$ENV{PATH}")
-  string(REPLACE "$ENV{ROOTSYS}/lib" "" ENV_LD_LIBRARY_PATH "$ENV{LD_LIBRARY_PATH}")
-  string(REPLACE "$ENV{ROOTSYS}/lib" "" ENV_PYTHONPATH "$ENV{PYTHONPATH}")
-  string(REPLACE "$ENV{ROOTSYS}" "" ENV_CMAKE_PREFIX_PATH "$ENV{CMAKE_PREFIX_PATH}")
-  set(ENV{PATH} "${ENV_PATH}")
-  set(ENV{LD_LIBRARY_PATH} "${ENV_LD_LIBRARY_PATH}")
-  set(ENV{PYTHONPATH} "${ENV_PYTHONPATH}")
-  set(ENV{CMAKE_PREFIX_PATH} "${ENV_CMAKE_PREFIX_PATH}")
+if(NOT $ENV{ROOTSYS} STREQUAL "" AND NOT $ENV{ROOTSYS} STREQUAL "${CMAKE_BINARY_DIR}")
+  function(strip_path ENV_VAR _path)
+    if(NOT $ENV{${ENV_VAR}} STREQUAL "")
+      string(REPLACE ":${_path}:" ":" _temp_envvar $ENV{${ENV_VAR}})
+      string(REGEX REPLACE "^${_path}:" "" _temp_envvar ${_temp_envvar})
+      string(REGEX REPLACE ":${_path}$" "" _temp_envvar ${_temp_envvar})
+      if (_temp_envvar STREQUAL _path)
+        set(ENV{ENV_VAR} "")
+      else()
+        set(ENV{ENV_VAR} "${_temp_envvar}")
+      endif()
+    endif()
+  endfunction()
+  strip_path("PATH" "$ENV{ROOTSYS}/bin")
+  if(NOT WIN32)
+    strip_path("LD_LIBRARY_PATH" "$ENV{ROOTSYS}/lib")
+  endif()
+  if(APPLE)
+    strip_path("DYLD_LIBRARY_PATH" "$ENV{ROOTSYS}/lib")
+  endif()
+  strip_path("PYTHONPATH" "$ENV{ROOTSYS}/lib")
+  # if we leave the ':' it will result in an empty entry in the CMAKE_PREFIX_PATH
+  # which will interpreted as the current directory.
+  strip_path("CMAKE_PREFIX_PATH" "$ENV{ROOTSYS}")
   set(ENV{ROOTSYS} ${CMAKE_BINARY_DIR})
 endif()
 
@@ -310,29 +325,36 @@ add_custom_command(OUTPUT ${stamp_file}
                    COMMAND ${CMAKE_COMMAND} -E touch ${stamp_file}
                    COMMENT "Copying directories such as etc, icons, fonts, js, ui5, etc. to build area")
 
+
+#---Copy files to the build area at build time---------------------------------
+set(directories_to_copy etc test icons fonts macros tutorials)
 if(http)
-set(jsroot_files js/*)
+  list(APPEND directories_to_copy js)
 endif()
 if(webgui)
-set(openui5_files ui5/*)
+  list(APPEND directories_to_copy ui5)
 endif()
 
-#---Copy files to the build area, with dependency---------------------------------
-file(GLOB_RECURSE artifact_files RELATIVE ${CMAKE_SOURCE_DIR} tutorials/* etc/* test/* icons/* fonts/* macros/* ${jsroot_files} ${openui5_files})
-set(artifact_files_builddir)
-foreach(artifact_file ${artifact_files})
-  # Filter out hsimple.root; someone might have created it in the src dir, and the hsimple.root
-  # target below will interfere.
-  if (NOT (artifact_file STREQUAL "tutorials/hsimple.root"))
-    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/${artifact_file}
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CMAKE_SOURCE_DIR}/${artifact_file} ${CMAKE_BINARY_DIR}/${artifact_file}
-      COMMENT "Copying ${CMAKE_SOURCE_DIR}/${artifact_file}"
-      DEPENDS ${CMAKE_SOURCE_DIR}/${artifact_file})
-    list(APPEND artifact_files_builddir ${CMAKE_BINARY_DIR}/${artifact_file})
-  endif()
-endforeach()
-add_custom_target(move_artifacts DEPENDS ${stamp_file} ${artifact_files_builddir})
+foreach(dir_to_copy ${directories_to_copy})
+  # Create a list of files for which we want dependency tracking.
+  # Exclude certain endings, e.g. ACLiC artifacts, so CMake doesn't complain when they are deleted (JIRA#9688)
+  file(GLOB_RECURSE artifacts_in ${dir_to_copy}/*)
+  list(FILTER artifacts_in EXCLUDE REGEX "\.(d|swp|so|dylib|lib|dll|pcm|bak)$")
 
+  set(artifacts_out ${artifacts_in})
+  list(TRANSFORM artifacts_out REPLACE ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR})
+  list(APPEND all_artifacts ${artifacts_out})
+
+  add_custom_command(OUTPUT ${artifacts_out}
+      COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/${dir_to_copy} ${CMAKE_BINARY_DIR}/${dir_to_copy}
+      COMMENT "Copy ${dir_to_copy}"
+      DEPENDS ${artifacts_in})
+endforeach()
+
+add_custom_target(move_artifacts DEPENDS ${stamp_file} ${all_artifacts})
+
+
+#---Add the main sources ---------------------------------
 add_subdirectory (interpreter)
 
 # Update etc/gitinfo.txt for every build.
@@ -355,14 +377,13 @@ add_subdirectory (net)
 add_subdirectory (graf2d)
 add_subdirectory (graf3d)
 add_subdirectory (gui)
-if(html)
-  add_subdirectory (html)
-endif()
 add_subdirectory (montecarlo)
 if(geom)
   add_subdirectory (geom)
 endif()
-add_subdirectory (rootx)
+if(NOT WIN32)
+  add_subdirectory (rootx)
+endif()
 add_subdirectory (misc)
 add_subdirectory (main)
 add_subdirectory (bindings)
@@ -379,6 +400,10 @@ endif()
 
 ROOT_ADD_TEST_SUBDIRECTORY(test)
 ROOT_ADD_TEST_SUBDIRECTORY(tutorials)
+
+# Each subdirectory added above will register headers to be copied to the build tree.
+# Here, the copy targets are created:
+ROOT_CREATE_HEADER_COPY_TARGETS()
 
 get_property(__allHeaders GLOBAL PROPERTY ROOT_HEADER_TARGETS)
 get_property(__allBuiltins GLOBAL PROPERTY ROOT_BUILTIN_TARGETS)
@@ -529,10 +554,10 @@ add_custom_target(hsimple ALL DEPENDS tutorials/hsimple.root)
 add_dependencies(hsimple onepcm)
 if(WIN32)
   set(hsimple_cmd COMMAND ${CMAKE_COMMAND} -E env PATH="${CMAKE_RUNTIME_OUTPUT_DIRECTORY}\\\;%PATH%"
-                          ROOTIGNOREPREFIX=1 ROOT_HIST=0 $<TARGET_FILE:root.exe> -l -q -b -n -x hsimple.C -e return)
+                          ROOTIGNOREPREFIX=1 ROOT_HIST=0 $<TARGET_FILE:root.exe> -l -q -b -n -x ${CMAKE_SOURCE_DIR}/tutorials/hsimple.C -e return)
 else()
   set(hsimple_cmd COMMAND ${MODULES_ROOT_INCPATH} ${ld_library_path}=${CMAKE_LIBRARY_OUTPUT_DIRECTORY}:$ENV{${ld_library_path}}
-                          ROOTIGNOREPREFIX=1 ROOT_HIST=0 $<TARGET_FILE:root.exe> -l -q -b -n -x hsimple.C -e return)
+                          ROOTIGNOREPREFIX=1 ROOT_HIST=0 $<TARGET_FILE:root.exe> -l -q -b -n -x ${CMAKE_SOURCE_DIR}/tutorials/hsimple.C -e return)
 endif()
 add_custom_command(OUTPUT tutorials/hsimple.root
                    ${hsimple_cmd}

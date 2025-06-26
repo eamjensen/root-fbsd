@@ -116,8 +116,8 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFitCore
     RooFactoryWSTool.h
     RooFirstMoment.h
     RooFit.h
+    RooFit/CodegenContext.h
     RooFit/Config.h
-    RooFit/Detail/CodeSquashContext.h
     RooFit/Detail/MathFuncs.h
     RooFit/Detail/NormalizationHelpers.h
     RooFit/Detail/RooNLLVarNew.h
@@ -134,8 +134,8 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFitCore
     RooFit/TestStatistics/RooSubsidiaryL.h
     RooFit/TestStatistics/RooSumL.h
     RooFit/TestStatistics/RooUnbinnedL.h
-    RooFit/TestStatistics/buildLikelihood.h
     RooFit/TestStatistics/SharedOffset.h
+    RooFit/TestStatistics/buildLikelihood.h
     RooFitLegacy/RooCatTypeLegacy.h
     RooFitLegacy/RooCategorySharedProperties.h
     RooFitLegacy/RooTreeData.h
@@ -191,7 +191,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFitCore
     RooProduct.h
     RooProfileLL.h
     RooProjectedPdf.h
-    RooProofDriverSelector.h
     RooPullVar.h
     RooQuasiRandomGenerator.h
     RooRandom.h
@@ -289,7 +288,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFitCore
     src/RooBinning.cxx
     src/RooBinningCategory.cxx
     src/RooBrentRootFinder.cxx
-    src/RooCacheManager.cxx
     src/RooCachedPdf.cxx
     src/RooCachedReal.cxx
     src/RooCategory.cxx
@@ -326,7 +324,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFitCore
     src/RooFFTConvPdf.cxx
     src/RooFactoryWSTool.cxx
     src/RooFirstMoment.cxx
-    src/RooFit/Detail/CodeSquashContext.cxx
+    src/RooFit/CodegenContext.cxx
     src/RooFit/EvalContext.cxx
     src/RooFit/Evaluator.cxx
     src/RooFitImplHelpers.cxx
@@ -391,7 +389,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFitCore
     src/RooProduct.cxx
     src/RooProfileLL.cxx
     src/RooProjectedPdf.cxx
-    src/RooProofDriverSelector.cxx
     src/RooPullVar.cxx
     src/RooQuasiRandomGenerator.cxx
     src/RooRandom.cxx
@@ -457,7 +454,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFitCore
     Graf
     Matrix
     Tree
-    Minuit
     RIO
     MathCore
     Foam

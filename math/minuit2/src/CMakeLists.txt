@@ -7,10 +7,6 @@
 add_subdirectory(math)
 
 set(MINUIT2_HEADERS
-    ABObj.h
-    ABProd.h
-    ABSum.h
-    ABTypes.h
     AnalyticalGradientCalculator.h
     BFGSErrorUpdator.h
     CombinedMinimizer.h
@@ -34,18 +30,9 @@ set(MINUIT2_HEADERS
     FumiliStandardMaximumLikelihoodFCN.h
     FunctionGradient.h
     FunctionMinimum.h
-    GenericFunction.h
     GradientCalculator.h
     HessianGradientCalculator.h
     InitialGradientCalculator.h
-    LASymMatrix.h
-    LAVector.h
-    LaInverse.h
-    LaOuterProduct.h
-    LaProd.h
-    LaSum.h
-    MPIProcess.h
-    MatrixInverse.h
     MinimumBuilder.h
     MinimumError.h
     MinimumErrorUpdator.h
@@ -88,11 +75,9 @@ set(MINUIT2_HEADERS
     MnTiny.h
     MnTraceObject.h
     MnUserCovariance.h
-    MnUserFcn.h
     MnUserParameterState.h
     MnUserParameters.h
     MnUserTransformation.h
-    MnVectorTransform.h
     ModularFunctionMinimizer.h
     NegativeG2LineSearch.h
     Numerical2PGradientCalculator.h
@@ -106,11 +91,9 @@ set(MINUIT2_HEADERS
     SinParameterTransformation.h
     SqrtLowParameterTransformation.h
     SqrtUpParameterTransformation.h
-    StackAllocator.h
     VariableMetricBuilder.h
     VariableMetricEDMEstimator.h
     VariableMetricMinimizer.h
-    VectorOuterProduct.h
     )
 
 set(MINUIT2_SOURCES
@@ -127,12 +110,6 @@ set(MINUIT2_SOURCES
     FumiliStandardMaximumLikelihoodFCN.cxx
     HessianGradientCalculator.cxx
     InitialGradientCalculator.cxx
-    LaEigenValues.cxx
-    LaInnerProduct.cxx
-    LaInverse.cxx
-    LaOuterProduct.cxx
-    LaSumOfElements.cxx
-    LaVtMVSimilarity.cxx
     MPIProcess.cxx
     MinimumBuilder.cxx
     Minuit2Minimizer.cxx
@@ -146,6 +123,7 @@ set(MINUIT2_SOURCES
     MnGlobalCorrelationCoeff.cxx
     MnHesse.cxx
     MnLineSearch.cxx
+    MnMatrix.cxx
     MnMachinePrecision.cxx
     MnMinos.cxx
     MnParabolaFactory.cxx
@@ -159,7 +137,6 @@ set(MINUIT2_SOURCES
     MnStrategy.cxx
     MnTiny.cxx
     MnTraceObject.cxx
-    MnUserFcn.cxx
     MnUserParameterState.cxx
     MnUserParameters.cxx
     MnUserTransformation.cxx
@@ -177,17 +154,7 @@ set(MINUIT2_SOURCES
     VariableMetricBuilder.cxx
     VariableMetricEDMEstimator.cxx
     mnbins.cxx
-    mndasum.cxx
-    mndaxpy.cxx
-    mnddot.cxx
-    mndscal.cxx
-    mndspmv.cxx
-    mndspr.cxx
-    mnlsame.cxx
-    mnteigen.cxx
     mntplot.cxx
-    mnvert.cxx
-    mnxerbla.cxx
     )
 
 prepend_path(MINUIT2_HEADERS "${Minuit2_SOURCE_DIR}/inc/Minuit2" ${MINUIT2_HEADERS})

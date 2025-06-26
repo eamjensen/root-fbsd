@@ -1,5 +1,62 @@
 # JSROOT changelog
 
+## Changes in 7.9.1
+1. Fix - colz handling on `THStack`, avoid multiple palette drawings
+2. Fix - bug in pad.Divide context menu command
+3. Fix - drag and drop of histograms on empty sub-pads
+4. Fix - add missing colors 100 - 127
+5. Fix - correct online context menu for histogram title
+6. Fix - copy all X axis attributes in multi-graph painter
+7. Fix - if histogram WebGL drawing fails, fallback to default 2D
+
+
+## Changes in 7.9.0
+1. New draw options:
+   - 'pol' and 'arr_colz' draw option for `TH2`
+   - 'col7' uses bar offset and width for `TH2`
+   - 'cont5' for `TGraph2D` using Delaunay algorithm
+   - 'chord' drawing of `TH2` implements zooming
+   - 'box1' for `TH3` with negative bins
+   - 'same' option for first histogram on pad, draw without creating `TFrame`
+   - 'rangleNN' for `TGraphPolargram`, also support fAxisAngle member
+   - 'N' and 'O' for `TGraphPolargram` for angle coordinate systems
+   - 'arc' for `TPave` and derived classes
+   - 'allbins' for histograms to display underflow/overflow bins
+   - Poisson errors for `TH1`/`TH2`, https://root-forum.cern.ch/t/62335/
+   - test fSumw2 when detect empty `TH2` bin, sync with https://github.com/root-project/root/pull/17948
+2. New supported classes:
+   - `TF12` - projection of `TF2`
+   - `TLink` and `TButton`, used in `TInspectCanvas`
+3. New partameters in `TTree::Draw`:
+   - '>>elist' to request entries matching cut conditions
+   - 'elist' to specify entries for processing
+   - 'nmatch' to process exactly the specified number of entries, break processing afterwards
+   - 'staged' algorithm to first select entries and then process only these entries
+4. New settings parameters:
+   - `settings.FilesTimeout` global timeout for file reading operations
+   - `settings.FilesRemap` fallback address for http server, used for `root.cern`
+   - `settings.TreeReadBunchSize` bunch read size for `TTree` processing
+   - `settings.UserSelect` to set 'user-select: none' style in drawings to exclude text selection
+5. Context menus:
+   - all `TPave`-derived classes
+   - in 'chord' drawings of `TH2`
+   - editing histogram and graph title
+6. Fixes:
+   - match histogram title drawing with native ROOT implementation
+   - float to string conversion when 'g' is specified
+   - handle `TPave` NDC position also when fInit is not set
+   - properly handle image sizes in svg2pdf
+   - drawing `TPaveText` with zero text size
+   - correct axis range in `TScatter` drawing
+   - use draw option also for graph drawing in `TTree::Draw`
+7. Internals:
+   - upgrade three.js r168 -> r174
+   - use private members and methods
+   - use `WeakRef` class for cross-referencing of painters
+   - use negative indexes in arrays and Strings
+   - remove support of qt5 webengine, only qt6web can be used
+
+
 ## Changes in 7.8.2
 1. Fix - hidden canvas in Jupyter Lab, https://root-forum.cern.ch/t/63097/
 2. Fix - repair small bug in `TF3` painting

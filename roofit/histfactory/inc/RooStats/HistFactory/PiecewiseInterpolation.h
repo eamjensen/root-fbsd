@@ -36,7 +36,7 @@ public:
   ~PiecewiseInterpolation() override ;
 
   PiecewiseInterpolation(const PiecewiseInterpolation& other, const char *name = nullptr);
-  TObject* clone(const char* newname) const override { return new PiecewiseInterpolation(*this, newname); }
+  TObject* clone(const char* newname=nullptr) const override { return new PiecewiseInterpolation(*this, newname); }
 
   /// Return pointer to the nominal hist function.
   const RooAbsReal* nominalHist() const {
@@ -68,8 +68,6 @@ public:
   std::list<double>* binBoundaries(RooAbsRealLValue& /*obs*/, double /*xlo*/, double /*xhi*/) const override ;
   std::list<double>* plotSamplingHint(RooAbsRealLValue& obs, double xlo, double xhi) const override ;
   bool isBinnedDistribution(const RooArgSet& obs) const override ;
-
-  void translate(RooFit::Detail::CodeSquashContext &ctx) const override;
 
 protected:
 

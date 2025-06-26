@@ -105,7 +105,7 @@ End_Macro
 A more complex example:
 
 Begin_Macro(source)
-../../../tutorials/hist/hstack.C
+../../../tutorials/hist/hist023_THStack_simple.C
 End_Macro
 
 Note that picking is supported for all drawing modes.
@@ -117,17 +117,16 @@ Stacks of 2D histograms can also be painted as violin plots, combinations of can
 violin plots are possible as well:
 
 Begin_Macro(source)
-../../../tutorials/hist/candleplotstack.C
+../../../tutorials/hist/hist051_Graphics_candle_plot_stack.C
 End_Macro
 
 Automatic coloring according to the current palette is available as shown in the
 following example:
 
 Begin_Macro(source)
-../../../tutorials/hist/thstackpalettecolor.C
+../../../tutorials/hist/hist027_THStack_palette_color.C
 End_Macro
 */
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /// constructor with name and title
@@ -788,8 +787,12 @@ void THStack::BuildAndPaint(Option_t *choptin, Bool_t paint, Bool_t rebuild_stac
       while (lnk) {
          auto subpad = padsav->GetPad(i++);
          if (!subpad) break;
-         subpad->Clear();
-         subpad->Add(lnk->GetObject(), lnk->GetOption());
+         // check if histogram already drawn on the pad
+         if (!subpad->FindObject(lnk->GetObject())) {
+            subpad->Clear();
+            subpad->Add(lnk->GetObject(), lnk->GetOption());
+            subpad->Paint(); // need to re-paint subpad immediately
+         }
          lnk = lnk->Next();
       }
       padsav->cd();
@@ -879,6 +882,7 @@ void THStack::BuildAndPaint(Option_t *choptin, Bool_t paint, Bool_t rebuild_stac
          }
       }
       fHistogram->SetStats(false);
+      fHistogram->Sumw2(kFALSE);
       TH1::AddDirectory(add);
    } else {
       fHistogram->SetTitle(GetTitle());
@@ -1028,51 +1032,43 @@ void THStack::RecursiveRemove(TObject *obj)
 ////////////////////////////////////////////////////////////////////////////////
 /// Save primitive as a C++ statement(s) on output stream out.
 
-void THStack::SavePrimitive(std::ostream &out, Option_t *option /*= ""*/)
+void THStack::SavePrimitive(std::ostream &out, Option_t *option)
 {
-   char quote = '"';
-   out<<"   "<<std::endl;
-   if (gROOT->ClassSaved(THStack::Class())) {
-      out<<"   ";
-   } else {
-      out<<"   THStack *";
-   }
-   out<<GetName()<<" = new THStack();"<<std::endl;
-   out<<"   "<<GetName()<<"->SetName("<<quote<<GetName()<<quote<<");"<<std::endl;
-   out<<"   "<<GetName()<<"->SetTitle("<<quote<<GetTitle()<<quote<<");"<<std::endl;
+   TString name = gInterpreter->MapCppName(GetName());
 
-   if (fMinimum != -1111) {
-      out<<"   "<<GetName()<<"->SetMinimum("<<fMinimum<<");"<<std::endl;
-   }
-   if (fMaximum != -1111) {
-      out<<"   "<<GetName()<<"->SetMaximum("<<fMaximum<<");"<<std::endl;
-   }
+   SavePrimitiveConstructor(out, Class(), name);
+   SavePrimitiveNameTitle(out, name);
 
-   static Int_t frameNumber = 0;
+   if (fMinimum != -1111)
+      out << "   " << name << "->SetMinimum(" << fMinimum << ");\n";
+   if (fMaximum != -1111)
+      out << "   " << name << "->SetMaximum(" << fMaximum << ");\n";
+
+   thread_local Int_t hcount = 0;
    if (fHistogram) {
-      frameNumber++;
       TString hname = fHistogram->GetName();
-      fHistogram->SetName(TString::Format("%s_stack_%d", hname.Data(), frameNumber).Data());
-      fHistogram->SavePrimitive(out,"nodraw");
-      out<<"   "<<GetName()<<"->SetHistogram("<<fHistogram->GetName()<<");"<<std::endl;
-      out<<"   "<<std::endl;
+      fHistogram->SetName(TString::Format("%s_stack_%d", name.Data(), ++hcount).Data());
+      fHistogram->SavePrimitive(out, "nodraw");
+      out << "   " << name << "->SetHistogram(" << fHistogram->GetName() << ");\n";
+      out << "   \n";
       fHistogram->SetName(hname.Data()); // restore histogram name
    }
 
    if (fHists) {
       auto lnk = fHists->FirstLink();
-      Int_t hcount = 0;
       while (lnk) {
-         auto h = (TH1 *) lnk->GetObject();
+         auto h = static_cast<TH1 *>(lnk->GetObject());
          TString hname = h->GetName();
-         h->SetName(TString::Format("%s_stack_%d", hname.Data(), ++hcount).Data());
-         h->SavePrimitive(out,"nodraw");
-         out<<"   "<<GetName()<<"->Add("<<h->GetName()<<","<<quote<<lnk->GetOption()<<quote<<");"<<std::endl;
-         lnk = lnk->Next();
+         h->SetName(TString::Format("%s_stack_%d", name.Data(), ++hcount).Data());
+         h->SavePrimitive(out, "nodraw");
+         out << "   " << name << "->Add(" << h->GetName() << ", \""
+             << TString(lnk->GetOption()).ReplaceSpecialCppChars() << "\");\n";
          h->SetName(hname.Data()); // restore histogram name
+         lnk = lnk->Next();
       }
    }
-   out<<"   "<<GetName()<<"->Draw("<<quote<<option<<quote<<");"<<std::endl;
+
+   SavePrimitiveDraw(out, name, option);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

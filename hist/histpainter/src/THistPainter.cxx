@@ -81,7 +81,7 @@
 - [Setting line, fill, marker, and text attributes](\ref HP03)
 - [Setting Tick marks on the histogram axis](\ref HP04)
 - [Giving titles to the X, Y and Z axis](\ref HP05)
-- [The option "SAME"](\ref HP060)
+- [The option SAME](\ref HP060)
    - [Limitations](\ref HP060a)
 - [Colors automatically picked in palette](\ref HP061)
 - [Superimposing two histograms with different scales in the same pad](\ref HP06)
@@ -89,7 +89,7 @@
 - [Fit Statistics](\ref HP08)
 - [The error bars options](\ref HP09)
 - [The bar chart option](\ref HP100)
-- [The "BAR" and "HBAR" options](\ref HP10)
+- [The BAR and HBAR options](\ref HP10)
 - [The SCATter plot option (legacy draw option)](\ref HP11)
 - [The ARRow option](\ref HP12)
 - [The BOX option](\ref HP13)
@@ -102,12 +102,12 @@
    - [The LIST option](\ref HP16a)
    - [The AITOFF, MERCATOR, SINUSOIDAL and PARABOLIC options](\ref HP16b)
 - [The LEGO options](\ref HP17)
-- [The "SURFace" options](\ref HP18)
+- [The SURFace options](\ref HP18)
 - [Cylindrical, Polar, Spherical and PseudoRapidity/Phi options](\ref HP19)
 - [Base line for bar-charts and lego plots](\ref HP20)
 - [TH2Poly Drawing](\ref HP20a)
 - [The SPEC option](\ref HP21)
-- [Option "Z" : Adding the color palette on the right side of the pad](\ref HP22)
+- [Option Z : Adding the color palette on the right side of the pad](\ref HP22)
 - [Setting the color palette](\ref HP23)
 - [Drawing a sub-range of a 2-D histogram; the [cutg] option](\ref HP24)
 - [Drawing options for 3D histograms](\ref HP25)
@@ -127,7 +127,7 @@
    - [Panning](\ref HP29i)
    - [Box cut](\ref HP29j)
    - [Plot specific interactions (dynamic slicing etc.)](\ref HP29k)
-   - [Surface with option "GLSURF"](\ref HP29l)
+   - [Surface with option GLSURF](\ref HP29l)
    - [TF3](\ref HP29m)
    - [Box](\ref HP29n)
    - [Iso](\ref HP29o)
@@ -243,6 +243,7 @@ using `TH1::GetOption`:
 | "Y+"     | The Y-axis is drawn on the right side of the plot. |
 | "MIN0"   | Set minimum value for the Y axis to 0, equivalent to gStyle->SetHistMinimumZero(). |
 
+
 \anchor HP01b
 #### Options supported for 1D histograms
 
@@ -272,6 +273,7 @@ using `TH1::GetOption`:
 | "LF2"    | Draw histogram like with option "L" but with a fill area. Note that "L" draws also a fill area if the hist fill color is set but the fill area corresponds to the histogram contour.|
 
 
+
 \anchor HP01c
 #### Options supported for 2D histograms
 
@@ -281,11 +283,12 @@ using `TH1::GetOption`:
 | "ARR"        | Arrow mode. Shows gradient between adjacent cells.|
 | "BOX"        | A box is drawn for each cell with surface proportional to the content's absolute value. A negative content is marked with a X. |
 | "BOX1"       | A button is drawn for each cell with surface proportional to content's absolute value. A sunken button is drawn for negative values a raised one for positive.|
-| "COL"        | A box is drawn for each cell with a color scale varying with contents. All the none empty bins are painted. Empty bins are not painted unless some bins have a negative content because in that case the null bins might be not empty.  `TProfile2D` histograms are handled differently because, for this type of 2D histograms, it is possible to know if an empty bin has been filled or not. So even if all the bins' contents are positive some empty bins might be painted. And vice versa, if some bins have a negative content some empty bins might be not painted (default).|
+| "COL"        | A box is drawn for each cell with a color scale varying with contents. All the none empty bins (bins with content and error equal to 0) are painted. Empty bins are not painted unless some bins have a negative content because in that case the null bins might be not empty.  `TProfile2D` histograms are handled differently because, for this type of 2D histograms, it is possible to know if an empty bin has been filled or not. So even if all the bins' contents are positive some empty bins might be painted. And vice versa, if some bins have a negative content some empty bins might be not painted (default).|
+| "COL1"       | Same as "COL" but in case of histogram with negative content the empty bins are not drawn.
 | "COLZ"       | Same as "COL". In addition the color palette is also drawn.|
 | "COL2"       | Alternative rendering algorithm to "COL". Can significantly improve rendering performance for large, non-sparse 2-D histograms.|
 | "COLZ2"      | Same as "COL2". In addition the color palette is also drawn.|
-| "Z CJUST"   | In combination with colored options "COL","CONT0" etc: Justify labels in the color palette at color boundaries. For more details see `TPaletteAxis`|
+| "Z CJUST"    | In combination with colored options "COL","CONT0" etc: Justify labels in the color palette at color boundaries. For more details see `TPaletteAxis`|
 | "CANDLE"     | Draw a candle plot along X axis.|
 | "CANDLEX"    | Same as "CANDLE".|
 | "CANDLEY"    | Draw a candle plot along Y axis.|
@@ -328,6 +331,7 @@ using `TH1::GetOption`:
 | "[cutg]"     | Draw only the sub-range selected by the TCutG named "cutg".|
 
 
+
 \anchor HP01d
 #### Options supported for 3D histograms
 
@@ -341,7 +345,6 @@ using `TH1::GetOption`:
 | "BOX2Z"  | Same as "BOX2". In addition the color palette is also drawn.|
 | "BOX3"   | Same as BOX1, but the border lines of each lego-bar are not drawn.|
 | "LEGO"   | Same as `BOX`.|
-
 
 \anchor HP01e
 #### Options supported for histograms' stacks (`THStack`)
@@ -456,15 +459,15 @@ is determined according to the number of objects having palette coloring in
 the current pad.
 
 Begin_Macro(source)
-../../../tutorials/hist/histpalettecolor.C
+../../../tutorials/hist/hist005_TH1_palettecolor.C
 End_Macro
 
 Begin_Macro(source)
-../../../tutorials/hist/thstackpalettecolor.C
+../../../tutorials/hist/hist027_THStack_palette_color.C
 End_Macro
 
 Begin_Macro(source)
-../../../tutorials/hist/thstack2palettecolor.C
+../../../tutorials/hist/hist025_THStack_2d_palette_color.C
 End_Macro
 
 \anchor HP06
@@ -806,7 +809,7 @@ End_Macro
 When the option `bar` or `hbar` is specified, a bar chart is drawn. A vertical
 bar-chart is drawn with the options `bar`, `bar0`, `bar1`, `bar2`, `bar3`, `bar4`.
 An horizontal bar-chart is drawn with the options `hbar`, `hbar0`, `hbar1`,
-`hbar2`, `hbar3`, `hbar4` (hbars.C).
+`hbar2`, `hbar3`, `hbar4` (hist006_TH1_bar_charts.C).
 
 - The bar is filled with the histogram fill color.
 - The left side of the bar is drawn with a light fill color.
@@ -821,7 +824,7 @@ An horizontal bar-chart is drawn with the options `hbar`, `hbar0`, `hbar1`,
 When an histogram has errors the option ["HIST"](\ref OPTHIST) together with the `(h)bar` option.
 
 Begin_Macro(source)
-../../../tutorials/hist/hbars.C
+../../../tutorials/hist/hist006_TH1_bar_charts.C
 End_Macro
 
 To control the bar width (default is the bin width) `TH1::SetBarWidth()`
@@ -1048,8 +1051,8 @@ is the color change between cells.
 
 The color palette in TStyle can be modified via `gStyle->SetPalette()`.
 
-All the non-empty bins are painted. Empty bins are not painted unless
-some bins have a negative content because in that case the null bins
+All the non-empty bins are painted. Empty bins (bins with content and error equal to 0) are 
+not painted unless some bins have a negative content because in that case the null bins
 might be not empty.
 
 `TProfile2D` histograms are handled differently because, for this type of 2D
@@ -1293,7 +1296,7 @@ X (option `CANDLE` or `CANDLEX`) or Y (option `CANDLEY`).
 Each TH1 is represented as one candle.
 
 Begin_Macro(source)
-../../../tutorials/hist/candleplotwhiskers.C
+../../../tutorials/hist/hist052_Graphics_candle_plot_whiskers.C
 End_Macro
 
 The candle reduces the information coming from a whole distribution into few values.
@@ -1520,7 +1523,7 @@ Also the color, the line width, the size of the points and so on can be changed 
 standard attribute setting methods such as SetLineColor() SetLineWidth().
 
 Begin_Macro(source)
-../../../tutorials/hist/candleplot.C
+../../../tutorials/hist/hist049_Graphics_candle_plot.C
 End_Macro
 
 \anchor HP140b
@@ -1618,7 +1621,7 @@ End_Macro
 The next example illustrates a time development of a certain value:
 
 Begin_Macro(source)
-../../../tutorials/hist/candledecay.C
+../../../tutorials/hist/hist047_Graphics_candle_decay.C
 End_Macro
 
 
@@ -1694,8 +1697,9 @@ Begin_Macro(source)
    htext5->SetMarkerSize(1.8);
    htext5->SetMarkerColor(kRed);
    htext4->SetBarOffset(0.2);
-   htext4->Draw("COL TEXT SAME");
    htext5->SetBarOffset(-0.2);
+   htext3->Draw("COL");
+   htext4->Draw("TEXT SAME");
    htext5->Draw("TEXT SAME");
 }
 End_Macro
@@ -1874,10 +1878,10 @@ To access the first graph in the list one should do:
     TGraph *gr1 = (TGraph*)list->First();
 
 
-The following example (ContourList.C) shows how to use this functionality.
+The following example (hist102_TH2_contour_list.C) shows how to use this functionality.
 
 Begin_Macro(source)
-../../../tutorials/hist/ContourList.C
+../../../tutorials/hist/hist102_TH2_contour_list.C
 End_Macro
 
 \anchor HP16b
@@ -1894,7 +1898,7 @@ sky maps or exposure maps (earth.C).
 | "PARABOLIC"  | Draw a contour via an Parabolic projection.|
 
 Begin_Macro(source)
-../../../tutorials/graphics/earth.C
+../../../tutorials/visualisation/graphics/earth.C
 End_Macro
 
 
@@ -2381,10 +2385,10 @@ End_Macro
 
 Rectangular bins are a frequent case. The special version of
 the `AddBin` method allows to define them more easily like
-shown in the following example (th2polyBoxes.C).
+shown in the following example (hist037_TH2Poly_boxes.C).
 
 Begin_Macro(source)
-../../../tutorials/hist/th2polyBoxes.C
+../../../tutorials/hist/hist037_TH2Poly_boxes.C
 End_Macro
 
 One `TH2Poly` bin can be a list of polygons. Such bins are defined
@@ -2522,9 +2526,9 @@ The following value of `ncolors` give access to:
     if ncolors = 51 and colors=0, a Deep Sea palette is used.
     if ncolors = 52 and colors=0, a Grey Scale palette is used.
     if ncolors = 53 and colors=0, a Dark Body Radiator palette is used.
-    if ncolors = 54 and colors=0, a two-color hue palette palette is used.(dark blue through neutral gray to bright yellow)
-    if ncolors = 55 and colors=0, a Rain Bow palette is used.
-    if ncolors = 56 and colors=0, an inverted Dark Body Radiator palette is used.
+    if ncolors = 54 and colors=0, a two-color hue palette palette is used.(dark blue through neutral gray to bright
+yellow) if ncolors = 55 and colors=0, a Rain Bow palette is used. if ncolors = 56 and colors=0, an inverted Dark Body
+Radiator palette is used.
 
 
 If `ncolors > 0 && colors == 0`, the default palette is used with a maximum of ncolors.
@@ -2739,10 +2743,10 @@ If the option `PADS` is specified, the current pad/canvas is
 subdivided into a number of pads equal to the number of histograms and each
 histogram is paint into a separate pad.
 
-The following example shows various types of stacks (hstack.C).
+The following example shows various types of stacks (hist023_THStack_simple.C).
 
 Begin_Macro(source)
-../../../tutorials/hist/hstack.C
+../../../tutorials/hist/hist023_THStack_simple.C
 End_Macro
 
 The option `nostackb` allows to draw the histograms next to each
@@ -2918,7 +2922,7 @@ The supported option is:
 
 | Option   | Description                                                       |
 |----------|-------------------------------------------------------------------|
-| "GLCOL"  | H3 is drawn using semi-transparent colored boxes.  See `$ROOTSYS/tutorials/gl/glvox1.C`.|
+| "GLCOL"  | H3 is drawn using semi-transparent colored boxes.  See `$ROOTSYS/tutorials/visualisation/gl/glvox1.C`.|
 
 
 
@@ -2959,7 +2963,7 @@ The supported option is:
 \anchor HP29e
 #### Parametric surfaces
 
-`$ROOTSYS/tutorials/gl/glparametric.C` shows how to create parametric
+`$ROOTSYS/tutorials/visualisation/gl/glparametric.C` shows how to create parametric
 equations and visualize the surface.
 
 \anchor HP29f
@@ -3069,8 +3073,8 @@ highlight mode is on, mouse movement over the bin will be represented
 graphically. Bin will be highlighted as "bin box" (presented by box
 object). Moreover, any highlight (change of bin) emits signal
 `TCanvas::Highlighted()` which allows the user to react and call their own
-function. For a better understanding see also the tutorials
-`$ROOTSYS/tutorials/hist/hlHisto*.C` files.
+function. For a better understanding see also the tutorial `hist043` to `hist046`
+lacated in `$ROOTSYS/tutorials/hist/`.
 
 Highlight mode is switched on/off by `TH1::SetHighlight()` function
 or interactively from `TH1` context menu. `TH1::IsHighlight()` to verify
@@ -3150,7 +3154,7 @@ void hlprint()
 
 \image html hlsimple.gif "Highlight mode and simple user function"
 
-For more complex demo please see for example `$ROOTSYS/tutorials/tree/temperature.C` file.
+For more complex demo please see for example `$ROOTSYS/tutorials/io/tree/tree200_temperature.C` file.
 
 */
 
@@ -3637,12 +3641,16 @@ void THistPainter::ExecuteEvent(Int_t event, Int_t px, Int_t py)
          bin2 = xaxis->GetLast()+1;
          bin1 = TMath::Max(bin1, 1);
          bin2 = TMath::Min(bin2, xaxis->GetNbins());
+         const bool resetXaxisRange = bin1 == 1 && xaxis->GetFirst() == 1 && bin2 == xaxis->GetNbins() && xaxis->GetLast() == xaxis->GetNbins();
          if (bin2>bin1) xaxis->SetRange(bin1,bin2);
+         if (resetXaxisRange) xaxis->ResetBit(TAxis::kAxisRange);
          bin1 = yaxis->GetFirst()-1;
          bin2 = yaxis->GetLast()+1;
          bin1 = TMath::Max(bin1, 1);
          bin2 = TMath::Min(bin2, yaxis->GetNbins());
+         const bool resetYaxisRange = bin1 == 1 && yaxis->GetFirst() == 1 && bin2 == yaxis->GetNbins() && yaxis->GetLast() == yaxis->GetNbins();
          if (bin2>bin1) yaxis->SetRange(bin1,bin2);
+         if (resetYaxisRange) yaxis->ResetBit(TAxis::kAxisRange);
       }
       gPad->Modified();
       gPad->Update();
@@ -4279,7 +4287,7 @@ Int_t THistPainter::MakeChopt(Option_t *choptin)
       }
       memcpy(l,"    ", 4);
       l = strstr(chopt,"N");
-      if (l && fH->InheritsFrom(TH2Poly::Class())) Hoption.Text += 3000;
+      if (l && fH->InheritsFrom(TH2Poly::Class())) Hoption.Text = 3000 + (Hoption.Text != 1 ? Hoption.Text : 0);
       Hoption.Color = 0;
    }
    l = strstr(chopt,"COLZ");
@@ -5765,7 +5773,7 @@ void THistPainter::PaintColorLevelsFast(Option_t*)
 
 void THistPainter::PaintColorLevels(Option_t*)
 {
-   Double_t z, zc, xk, xstep, yk, ystep, xlow, xup, ylow, yup;
+   Double_t z, e, zc, xk, xstep, yk, ystep, xlow, xup, ylow, yup;
 
    Double_t zmin = fH->GetMinimum();
    Double_t zmax = fH->GetMaximum();
@@ -5836,9 +5844,9 @@ void THistPainter::PaintColorLevels(Option_t*)
          Int_t bin  = j*(fXaxis->GetNbins()+2) + i;
          xk    = fXaxis->GetBinLowEdge(i);
          xstep = fXaxis->GetBinWidth(i);
-         if (Hoption.System == kPOLAR && xk<0) xk= 2*TMath::Pi()+xk;
          if (!IsInside(xk+0.5*xstep,yk+0.5*ystep)) continue;
          z     = fH->GetBinContent(bin);
+         e     = fH->GetBinError(bin);
          // if fH is a profile histogram do not draw empty bins
          if (prof2d) {
             const Double_t binEntries = prof2d->GetBinEntries(bin);
@@ -5847,7 +5855,7 @@ void THistPainter::PaintColorLevels(Option_t*)
          } else {
             // don't draw the empty bins for non-profile histograms
             // with positive content
-            if (z == 0) {
+            if (z == 0 && e == 0) {
                if (zmin >= 0 || Hoption.Logz) continue;
                if (Hoption.Color == 2) continue;
             }
@@ -5868,22 +5876,20 @@ void THistPainter::PaintColorLevels(Option_t*)
          }
          yup  = yk + ystep;
          ylow = yk;
-         if (Hoption.System != kPOLAR) {
-            if (Hoption.Logy) {
-               if (yup > 0)  yup  = TMath::Log10(yup);
-               else continue;
-               if (ylow > 0) ylow = TMath::Log10(ylow);
-               else continue;
-            }
-            if (xup  < gPad->GetUxmin()) continue;
-            if (yup  < gPad->GetUymin()) continue;
-            if (xlow > gPad->GetUxmax()) continue;
-            if (ylow > gPad->GetUymax()) continue;
-            if (xlow < gPad->GetUxmin()) xlow = gPad->GetUxmin();
-            if (ylow < gPad->GetUymin()) ylow = gPad->GetUymin();
-            if (xup  > gPad->GetUxmax()) xup  = gPad->GetUxmax();
-            if (yup  > gPad->GetUymax()) yup  = gPad->GetUymax();
+         if (Hoption.Logy) {
+            if (yup > 0)  yup  = TMath::Log10(yup);
+            else continue;
+            if (ylow > 0) ylow = TMath::Log10(ylow);
+            else continue;
          }
+         if (xup  < gPad->GetUxmin()) continue;
+         if (yup  < gPad->GetUymin()) continue;
+         if (xlow > gPad->GetUxmax()) continue;
+         if (ylow > gPad->GetUymax()) continue;
+         if (xlow < gPad->GetUxmin()) xlow = gPad->GetUxmin();
+         if (ylow < gPad->GetUymin()) ylow = gPad->GetUymin();
+         if (xup  > gPad->GetUxmax()) xup  = gPad->GetUxmax();
+         if (yup  > gPad->GetUymax()) yup  = gPad->GetUymax();
 
          if (fH->TestBit(TH1::kUserContour)) {
             zc = fH->GetContourLevelPad(0);
@@ -5903,13 +5909,24 @@ void THistPainter::PaintColorLevels(Option_t*)
 
          Int_t theColor = Int_t((color+0.99)*Float_t(ncolors)/Float_t(ndivz));
          if (theColor > ncolors-1) theColor = ncolors-1;
-         fH->SetFillColor(gStyle->GetColorPalette(theColor));
-         fH->TAttFill::Modify();
+         auto fillColor = gStyle->GetColorPalette(theColor);
          if (Hoption.System != kPOLAR) {
+            fH->SetFillColor(fillColor);
+            fH->TAttFill::Modify();
             gPad->PaintBox(xlow, ylow, xup, yup);
          } else  {
-            TCrown crown(0,0,ylow,yup,xlow*TMath::RadToDeg(),xup*TMath::RadToDeg());
-            crown.SetFillColor(gStyle->GetColorPalette(theColor));
+            Double_t midx = (gPad->GetUxmin() + gPad->GetUxmax()) / 2,
+                     midy = (gPad->GetUymin() + gPad->GetUymax()) / 2,
+                     a1 = (xlow - gPad->GetUxmin()) / (gPad->GetUxmax() - gPad->GetUxmin()) * 360,
+                     a2 = (xup - gPad->GetUxmin()) / (gPad->GetUxmax() - gPad->GetUxmin()) * 360,
+                     rx = gPad->GetUxmax() - gPad->GetUxmin(),
+                     ry = gPad->GetUymax() - gPad->GetUymin(),
+                     r1 = (ylow - gPad->GetUymin()) / (gPad->GetUymax() - gPad->GetUymin()) * rx / 2,
+                     r2 = (yup - gPad->GetUymin()) / (gPad->GetUymax() - gPad->GetUymin()) * rx / 2;
+
+            TCrown crown(midx, midy, r1, r2, a1, a2);
+            crown.SetYXRatio(rx > 0 ? ry / rx : 1);
+            crown.SetFillColor(fillColor);
             crown.SetLineColor(fH->GetLineColor());
             crown.SetLineWidth(fH->GetLineWidth());
             crown.SetLineStyle(fH->GetLineStyle());
@@ -8819,7 +8836,7 @@ void THistPainter::PaintStat(Int_t dostat, TF1 *fit)
    }
 
    if (!done) fFunctions->Add(stats);
-   stats->Paint();
+   stats->Paint(stats->GetOption());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9032,7 +9049,7 @@ void THistPainter::PaintStat2(Int_t dostat, TF1 *fit)
    }
 
    if (!done) fFunctions->Add(stats);
-   stats->Paint();
+   stats->Paint(stats->GetOption());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9246,7 +9263,7 @@ void THistPainter::PaintStat3(Int_t dostat, TF1 *fit)
    }
 
    if (!done) fFunctions->Add(stats);
-   stats->Paint();
+   stats->Paint(stats->GetOption());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -9661,7 +9678,7 @@ void THistPainter::PaintTable(Option_t *option)
          if (Hoption.Text)         PaintTH2PolyText(option);
          if (Hoption.Line)         PaintTH2PolyBins("l");
          if (Hoption.Mark)         PaintTH2PolyBins("P");
-      } else if (fH->GetEntries() != 0 && Hoption.Axis<=0) {
+      } else if (Hoption.Axis<=0) {
          if (Hoption.Scat)         PaintScatterPlot(option);
          if (Hoption.Arrow)        PaintArrows(option);
          if (Hoption.Box)          PaintBoxes(option);
@@ -10057,7 +10074,7 @@ void THistPainter::PaintText(Option_t *)
 {
 
    TLatex text;
-   text.SetTextFont(gStyle->GetTextFont());
+   text.SetTextFont(((int)gStyle->GetTextFont()/10)*10+2); // font precision must be 2
    text.SetTextColor(fH->GetMarkerColor());
    text.SetTextSize(0.02*fH->GetMarkerSize());
 
@@ -10300,7 +10317,7 @@ void THistPainter::PaintTitle()
    ptitle->AddText(fH->GetTitle());
    ptitle->SetBit(kCanDelete);
    ptitle->Draw();
-   ptitle->Paint();
+   ptitle->Paint("blNDC");
 
    if(!gPad->IsEditable()) delete ptitle;
 }
@@ -10865,8 +10882,8 @@ void THistPainter::ShowProjectionX(Int_t /*px*/, Int_t py)
    Float_t y   = gPad->PadtoY(upy);
    Int_t biny1 = fH->GetYaxis()->FindBin(y);
    Int_t biny2 = TMath::Min(biny1+nbins-1, fH->GetYaxis()->GetNbins());
-   Int_t py1   = gPad->YtoAbsPixel(fH->GetYaxis()->GetBinLowEdge(biny1));
-   Int_t py2   = gPad->YtoAbsPixel(fH->GetYaxis()->GetBinUpEdge(biny2));
+   Int_t py1   = gPad->YtoAbsPixel(gPad->GetLogy() ? TMath::Log10(fH->GetYaxis()->GetBinLowEdge(biny1)) : fH->GetYaxis()->GetBinLowEdge(biny1));
+   Int_t py2   = gPad->YtoAbsPixel(gPad->GetLogy() ? TMath::Log10(fH->GetYaxis()->GetBinUpEdge(biny2)) : fH->GetYaxis()->GetBinUpEdge(biny2));
 
    if (pyold1 || pyold2) gVirtualX->DrawBox(pxmin,pyold1,pxmax,pyold2,TVirtualX::kFilled);
    gVirtualX->DrawBox(pxmin,py1,pxmax,py2,TVirtualX::kFilled);
@@ -10950,8 +10967,8 @@ void THistPainter::ShowProjectionY(Int_t px, Int_t /*py*/)
    Float_t x   = gPad->PadtoX(upx);
    Int_t binx1 = fH->GetXaxis()->FindBin(x);
    Int_t binx2 = TMath::Min(binx1+nbins-1, fH->GetXaxis()->GetNbins());
-   Int_t px1   = gPad->XtoAbsPixel(fH->GetXaxis()->GetBinLowEdge(binx1));
-   Int_t px2   = gPad->XtoAbsPixel(fH->GetXaxis()->GetBinUpEdge(binx2));
+   Int_t px1   = gPad->XtoAbsPixel(gPad->GetLogx() ? TMath::Log10(fH->GetXaxis()->GetBinLowEdge(binx1)) : fH->GetXaxis()->GetBinLowEdge(binx1));
+   Int_t px2   = gPad->XtoAbsPixel(gPad->GetLogx() ? TMath::Log10(fH->GetXaxis()->GetBinUpEdge(binx2)) : fH->GetXaxis()->GetBinUpEdge(binx2));
 
    if (pxold1 || pxold2) gVirtualX->DrawBox(pxold1,pymin,pxold2,pymax,TVirtualX::kFilled);
    gVirtualX->DrawBox(px1,pymin,px2,pymax,TVirtualX::kFilled);

@@ -1,4 +1,4 @@
-import { httpRequest, createHttpRequest, loadScript, decodeUrl,
+import { settings, httpRequest, createHttpRequest, loadScript, decodeUrl,
          browser, setBatchMode, isBatchMode, isObject, isFunc, isStr, btoa_func } from './core.mjs';
 import { closeCurrentWindow, showProgress, loadOpenui5 } from './gui/utils.mjs';
 import { sha256, sha256_2 } from './base/sha256.mjs';
@@ -62,7 +62,7 @@ class LongPollSocket {
          this.connid = 'close';
          reqmode = 'text;sync'; // use sync mode to close connection before browser window closed
       } else if ((this.connid === null) || (typeof this.connid !== 'number')) {
-         if (!browser.qt5 && !browser.qt6) console.error('No connection');
+         if (!browser.qt6) console.error('No connection');
       } else {
          url += '?connection=' + this.connid;
          if (this.handle) url += '&' + this.handle.getConnArgs(this.counter++);
@@ -98,7 +98,7 @@ class LongPollSocket {
             const u8Arr = new Uint8Array(res);
             let str = '', i = 0, offset = u8Arr.length;
             if (offset < 4) {
-               if (!browser.qt5 && !browser.qt6) console.error(`longpoll got short message in raw mode ${offset}`);
+               if (!browser.qt6) console.error(`longpoll got short message in raw mode ${offset}`);
                return this.handle.processRequest(null);
             }
 
@@ -182,10 +182,8 @@ class LongPollSocket {
          if (isFunc(this.onclose))
             this.onclose();
          return;
-      } else {
-         if (isFunc(this.onmessage) && res)
-            this.onmessage({ data: res, offset: _offset });
-      }
+      } else if (isFunc(this.onmessage) && res)
+         this.onmessage({ data: res, offset: _offset });
 
       // minimal timeout to reduce load, generate dummy only if client not submit new request immediately
       if (!this.req)
@@ -210,10 +208,13 @@ class LongPollSocket {
 
 class FileDumpSocket {
 
+   #wait_for_file;
+
    constructor(receiver) {
       this.receiver = receiver;
       this.protocol = [];
       this.cnt = 0;
+      this.sendcnt = 0;
       httpRequest('protocol.json', 'text').then(res => this.getProtocol(res));
    }
 
@@ -221,7 +222,8 @@ class FileDumpSocket {
    getProtocol(res) {
       if (!res) return;
       this.protocol = JSON.parse(res);
-      if (isFunc(this.onopen)) this.onopen();
+      if (isFunc(this.onopen))
+         this.onopen();
       this.nextOperation();
    }
 
@@ -230,7 +232,8 @@ class FileDumpSocket {
       if (this.protocol[this.cnt] === 'send') {
          this.cnt++;
          setTimeout(() => this.nextOperation(), 10);
-      }
+      } else
+         this.sendcnt++;
    }
 
    /** @summary Emulate close */
@@ -239,15 +242,24 @@ class FileDumpSocket {
    /** @summary Read data for next operation */
    nextOperation() {
       // when file request running - just ignore
-      if (this.wait_for_file) return;
+      if (this.#wait_for_file)
+         return;
       const fname = this.protocol[this.cnt];
-
       if (!fname) return;
-      if (fname === 'send') return; // waiting for send
-      this.wait_for_file = true;
+
+      if (fname === 'send') {
+         if (this.sendcnt > 0) {
+            this.sendcnt--;
+            this.cnt++;
+            this.nextOperation();
+         }
+         return;
+      }
+
+      this.#wait_for_file = true;
       this.cnt++;
       httpRequest(fname, (fname.indexOf('.bin') > 0 ? 'buf' : 'text')).then(res => {
-         this.wait_for_file = false;
+         this.#wait_for_file = false;
          if (!res) return;
          const p = fname.indexOf('_ch'),
                chid = (p > 0) ? Number.parseInt(fname.slice(p+3, fname.indexOf('.', p))) : 1;
@@ -340,8 +352,10 @@ class WebWindowHandle {
       if (!force_queue && (!this.msgqueue || !this.msgqueue.length))
          return this.invokeReceiver(false, 'onWebsocketMsg', msg, len);
 
-      if (!this.msgqueue) this.msgqueue = [];
-      if (force_queue) len = undefined;
+      if (!this.msgqueue)
+         this.msgqueue = [];
+      if (force_queue)
+         len = undefined;
 
       this.msgqueue.push({ ready: true, msg, len });
    }
@@ -415,19 +429,20 @@ class WebWindowHandle {
       if (this.master)
          return this.master.send(msg, this.channelid);
 
-      if (!this._websocket || (this.state <= 0)) return false;
+      if (!this._websocket || (this.state <= 0))
+         return false;
 
-      if (!Number.isInteger(chid)) chid = 1; // when not configured, channel 1 is used - main widget
+      if (!Number.isInteger(chid))
+         chid = 1; // when not configured, channel 1 is used - main widget
 
-      if (this.cansend <= 0) console.error(`should be queued before sending cansend: ${this.cansend}`);
+      if (this.cansend === 0)
+         console.error('No credits for send, increase "WebGui.ConnCredits" value on server');
 
-      const prefix = `${this.send_seq++}:${this.ackn}:${this.cansend}:${chid}:`;
+      const prefix = `${this.send_seq++}:${this.ackn}:${this.cansend}:${chid}:`,
+            hash = this.key && sessionKey ? HMAC(this.key, `${prefix}${msg}`) : 'none';
+
       this.ackn = 0;
       this.cansend--; // decrease number of allowed send packets
-
-      let hash = 'none';
-      if (this.key && sessionKey)
-         hash = HMAC(this.key, `${prefix}${msg}`);
 
       this._websocket.send(`${hash}:${prefix}${msg}`);
 
@@ -479,15 +494,19 @@ class WebWindowHandle {
    /** @summary Request server to resize window
      * @desc For local displays like CEF or qt5 only server can do this */
    resizeWindow(w, h) {
-      if (browser.qt5 || browser.qt6 || browser.cef3)
+      if (browser.qt6 || browser.cef3)
          this.send(`RESIZE=${w},${h}`, 0);
       else if ((typeof window !== 'undefined') && isFunc(window?.resizeTo))
          window.resizeTo(w, h);
    }
 
    /** @summary Method open channel, which will share same connection, but can be used independently from main
+     * If @param url is provided - creates fully independent instance and perform connection with it
      * @private */
-   createChannel() {
+   createChannel(url) {
+      if (url)
+         return this.createNewInstance(url);
+
       if (this.master)
          return this.master.createChannel();
 
@@ -509,11 +528,16 @@ class WebWindowHandle {
       return channel;
    }
 
+   /** @summary Standalone mode without server connection */
+   isStandalone() { return this.kind === 'file'; }
+
    /** @summary Returns true if socket connected */
    isConnected() { return this.state > 0; }
 
    /** @summary Returns used channel ID, 1 by default */
    getChannelId() { return this.channelid && this.master ? this.channelid : 1; }
+
+   isChannel() { return this.getChannelId() > 1; }
 
    /** @summary Assign href parameter
      * @param {string} [path] - absolute path, when not specified window.location.url will be used
@@ -539,7 +563,7 @@ class WebWindowHandle {
          return this.href;
       let addr = this.href;
       if (relative_path.indexOf('../') === 0) {
-         const ddd = addr.lastIndexOf('/', addr.length-2);
+         const ddd = addr.lastIndexOf('/', addr.length - 2);
          addr = addr.slice(0, ddd) + relative_path.slice(2);
       } else
          addr += relative_path;
@@ -566,6 +590,10 @@ class WebWindowHandle {
      * @param [href] - optional URL to widget, use document URL instead
      * @private */
    connect(href) {
+      // ignore connect if channel from master connection configured
+      if (this.master && this.channelid)
+         return;
+
       this.close();
 
       if (href) {
@@ -839,7 +867,7 @@ class WebWindowHandle {
   * @param {object} arg.receiver - instance of receiver for websocket events, allows to initiate connection immediately
   * @param {string} [arg.first_recv] - required prefix in the first message from RWebWindow, remain part of message will be returned in handle.first_msg
   * @param {string} [arg.href] - URL to RWebWindow, using window.location.href by default
-  * @return {Promise} for ready-to-use {@link WebWindowHandle} instance  */
+  * @return {Promise} {@link WebWindowHandle} instance  */
 async function connectWebWindow(arg) {
    // mark that jsroot used with RWebWindow
    browser.webwindow = true;
@@ -887,9 +915,7 @@ async function connectWebWindow(arg) {
       if (!arg.platform)
          arg.platform = d.get('platform');
 
-      if (arg.platform === 'qt5')
-         browser.qt5 = true;
-      else if (arg.platform === 'qt6')
+      if (arg.platform === 'qt6')
          browser.qt6 = true;
       else if (arg.platform === 'cef3')
          browser.cef3 = true;
@@ -897,7 +923,8 @@ async function connectWebWindow(arg) {
       if (arg.batch === undefined)
          arg.batch = d.has('headless');
 
-      if (arg.batch) setBatchMode(true);
+      if (arg.batch)
+         setBatchMode(true);
 
       if (!arg.socket_kind)
          arg.socket_kind = d.get('ws');
@@ -910,7 +937,7 @@ async function connectWebWindow(arg) {
    }
 
    if (!arg.socket_kind) {
-      if (browser.qt5 || browser.qt6)
+      if (browser.qt6)
          arg.socket_kind = 'rawlongpoll';
       else if (browser.cef3)
          arg.socket_kind = 'longpoll';
@@ -918,13 +945,16 @@ async function connectWebWindow(arg) {
          arg.socket_kind = 'websocket';
    }
 
+   if (arg.settings)
+      Object.assign(settings, arg.settings);
+
    // only for debug purposes
    // arg.socket_kind = 'longpoll';
 
    const main = new Promise(resolveFunc => {
       const handle = new WebWindowHandle(arg.socket_kind, arg.credits);
       handle.setUserArgs(arg.user_args);
-      handle._can_modify_url = !!d_key; // if key appears in URL, we can put there new key
+      handle._can_modify_url = Boolean(d_key); // if key appears in URL, we can put there new key
       if (arg.href)
          handle.setHRef(arg.href); // apply href now  while connect can be called from other place
       else {
@@ -934,27 +964,31 @@ async function connectWebWindow(arg) {
 
       if (typeof window !== 'undefined') {
          window.onbeforeunload = () => handle.close(true);
-         if (browser.qt5 || browser.qt6) window.onqt5unload = window.onbeforeunload;
+         if (browser.qt6)
+            window.onqt5unload = window.onbeforeunload;
       }
 
       if (arg.receiver) {
          // when receiver exists, it handles itself callbacks
          handle.setReceiver(arg.receiver);
          handle.connect();
-         return resolveFunc(handle);
+         resolveFunc(handle);
+         return;
       }
 
-      if (!arg.first_recv)
-         return resolveFunc(handle);
+      if (!arg.first_recv) {
+         resolveFunc(handle);
+         return;
+      }
 
       handle.setReceiver({
          onWebsocketOpened() {}, // dummy function when websocket connected
 
-         onWebsocketMsg(handle, msg) {
+         onWebsocketMsg(h, msg) {
             if (msg.indexOf(arg.first_recv) !== 0)
-               return handle.close();
-            handle.first_msg = msg.slice(arg.first_recv.length);
-            resolveFunc(handle);
+               return h.close();
+            h.first_msg = msg.slice(arg.first_recv.length);
+            resolveFunc(h);
          },
 
          onWebsocketClosed() { closeCurrentWindow(); } // when connection closed, close panel as well
@@ -963,7 +997,8 @@ async function connectWebWindow(arg) {
       handle.connect();
    });
 
-   if (!arg.ui5) return main;
+   if (!arg.ui5)
+      return main;
 
    return Promise.all([main, loadOpenui5(arg)]).then(arr => arr[0]);
 }

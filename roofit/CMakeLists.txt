@@ -7,6 +7,7 @@
 set(roofit_legacy_eval_backend ON CACHE BOOL "" FORCE)
 
 add_subdirectory(batchcompute)
+add_subdirectory(codegen)
 if (roofit_multiprocess)
   add_subdirectory(roofitZMQ)
   add_subdirectory(multiprocess)
@@ -26,8 +27,6 @@ endif()
 
 set(roofit_etc_files
   etc/HistFactorySchema.dtd
-  etc/RooFitHS3_wsfactoryexpressions.json
-  etc/RooFitHS3_wsexportkeys.json
 )
 
 foreach(roofit_etc_file ${roofit_etc_files})

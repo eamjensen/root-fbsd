@@ -237,8 +237,8 @@ struct CountedItemGetter : public ItemGetter {
 
 struct TupleItemGetter : public CountedItemGetter {
     using CountedItemGetter::CountedItemGetter;
-    virtual Py_ssize_t size() { return PyTuple_GET_SIZE(fPyObject); }
-    virtual PyObject* get() {
+    Py_ssize_t size() override { return PyTuple_GET_SIZE(fPyObject); }
+    PyObject* get() override {
         if (fCur < PyTuple_GET_SIZE(fPyObject)) {
             PyObject* item = PyTuple_GET_ITEM(fPyObject, fCur++);
             Py_INCREF(item);
@@ -251,8 +251,8 @@ struct TupleItemGetter : public CountedItemGetter {
 
 struct ListItemGetter : public CountedItemGetter {
     using CountedItemGetter::CountedItemGetter;
-    virtual Py_ssize_t size() { return PyList_GET_SIZE(fPyObject); }
-    virtual PyObject* get() {
+    Py_ssize_t size() override { return PyList_GET_SIZE(fPyObject); }
+    PyObject* get() override {
         if (fCur < PyList_GET_SIZE(fPyObject)) {
             PyObject* item = PyList_GET_ITEM(fPyObject, fCur++);
             Py_INCREF(item);
@@ -265,7 +265,7 @@ struct ListItemGetter : public CountedItemGetter {
 
 struct SequenceItemGetter : public CountedItemGetter {
     using CountedItemGetter::CountedItemGetter;
-    virtual Py_ssize_t size() {
+    Py_ssize_t size() override {
         Py_ssize_t sz = PySequence_Size(fPyObject);
         if (sz < 0) {
             PyErr_Clear();
@@ -273,13 +273,13 @@ struct SequenceItemGetter : public CountedItemGetter {
         }
         return sz;
     }
-    virtual PyObject* get() { return PySequence_GetItem(fPyObject, fCur++); }
+    PyObject* get() override { return PySequence_GetItem(fPyObject, fCur++); }
 };
 
 struct IterItemGetter : public ItemGetter {
     using ItemGetter::ItemGetter;
-    virtual Py_ssize_t size() { return PyObject_LengthHint(fPyObject, 8); }
-    virtual PyObject* get() { return (*(Py_TYPE(fPyObject)->tp_iternext))(fPyObject); }
+    Py_ssize_t size() override { return PyObject_LengthHint(fPyObject, 8); }
+    PyObject* get() override { return (*(Py_TYPE(fPyObject)->tp_iternext))(fPyObject); }
 };
 
 static ItemGetter* GetGetter(PyObject* args)
@@ -527,6 +527,13 @@ PyObject* VectorData(PyObject* self, PyObject*)
 }
 
 
+// This function implements __array__, added to std::vector python proxies and causes
+// a bug (see explanation at Utility::AddToClass(pyclass, "__array__"...) in CPyCppyy::Pythonize)
+// The recursive nature of this function, passes each subarray (pydata) to the next call and only
+// the final buffer is cast to a lowlevel view and resized (in VectorData), resulting in only the
+// first 1D array to be returned. See https://github.com/root-project/root/issues/17729
+// It is temporarily removed to prevent errors due to -Wunused-function, since it is no longer added.
+#if 0
 //---------------------------------------------------------------------------
 PyObject* VectorArray(PyObject* self, PyObject* args, PyObject* kwargs)
 {
@@ -537,7 +544,7 @@ PyObject* VectorArray(PyObject* self, PyObject* args, PyObject* kwargs)
     Py_DECREF(pydata);
     return newarr;
 }
-
+#endif
 
 //-----------------------------------------------------------------------------
 static PyObject* vector_iter(PyObject* v) {
@@ -549,7 +556,7 @@ static PyObject* vector_iter(PyObject* v) {
 
 // tell the iterator code to set a life line if this container is a temporary
     vi->vi_flags = vectoriterobject::kDefault;
-    if (v->ob_refcnt <= 2 || (((CPPInstance*)v)->fFlags & CPPInstance::kIsValue))
+    if (Py_REFCNT(v) <= 2 || (((CPPInstance*)v)->fFlags & CPPInstance::kIsValue))
         vi->vi_flags = vectoriterobject::kNeedLifeLine;
 
     PyObject* pyvalue_type = PyObject_GetAttr((PyObject*)Py_TYPE(v), PyStrings::gValueType);
@@ -1237,7 +1244,7 @@ PyObject* STLStringDecode(CPPInstance* self, PyObject* args, PyObject* kwds)
         return nullptr;
 
     char* keywords[] = {(char*)"encoding", (char*)"errors", (char*)nullptr};
-    const char* encoding; const char* errors;
+    const char* encoding = nullptr; const char* errors = nullptr;
     if (!PyArg_ParseTupleAndKeywords(args, kwds,
             const_cast<char*>("s|s"), keywords, &encoding, &errors))
         return nullptr;
@@ -1810,8 +1817,15 @@ bool CPyCppyy::Pythonize(PyObject* pyclass, const std::string& name)
             Utility::AddToClass(pyclass, "__real_data", "data");
             Utility::AddToClass(pyclass, "data", (PyCFunction)VectorData);
 
+        // The addition of the __array__ utility to std::vector Python proxies causes a
+        // bug where the resulting array is a single dimension, causing loss of data when
+        // converting to numpy arrays, for >1dim vectors. Since this C++ pythonization
+        // was added with the upgrade in 6.32, and is only defined and used recursively,
+        // the safe option is to disable this function and no longer add it.
+#if 0
         // numpy array conversion
             Utility::AddToClass(pyclass, "__array__", (PyCFunction)VectorArray, METH_VARARGS | METH_KEYWORDS /* unused */);
+#endif
 
         // checked getitem
             if (HasAttrDirect(pyclass, PyStrings::gLen)) {

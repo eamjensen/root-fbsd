@@ -294,6 +294,7 @@ bool ROOT::Detail::TBranchProxy::Setup()
          fClass = fElement->GetClassPointer();
          fMemberOffset = fElement->GetOffset();
          fArrayLength = fElement->GetArrayLength();
+         fValueSize = fElement->GetSize();
       } else {
          Error("Setup","Data member %s seems no longer be in class %s",fDataMember.Data(),pcl->GetName());
          return false;
@@ -357,6 +358,7 @@ bool ROOT::Detail::TBranchProxy::Setup()
          if (leaf2) {
             fWhere = leaf2->GetValuePointer();
             fArrayLength = leaf2->GetLen();
+            fValueSize = leaf2->GetLenType();
             if (leaf2->GetLeafCount()) {
                fLeafCount = leaf2->GetLeafCount();
                fHasLeafCount = true;
@@ -392,6 +394,7 @@ bool ROOT::Detail::TBranchProxy::Setup()
             fElement = (TStreamerElement*)info->GetElements()->At(id);
             fIsaPointer = fElement->IsaPointer();
             fClass = fElement->GetClassPointer();
+            fValueSize = fElement->GetSize();
 
             if ((fIsMember || (be->GetType()!=3 && be->GetType() !=4))
                   && (be->GetType()!=31 && be->GetType()!=41)) {
@@ -517,33 +520,51 @@ bool ROOT::Detail::TBranchProxy::Setup()
 
             fMemberOffset = fClass->GetDataMemberOffset(member);
 
-            if (fMemberOffset<0) {
+            if (fMemberOffset < 0) {
                Error("Setup","%s",Form("Negative offset %d for %s in %s",
                                   fMemberOffset,fBranch->GetName(),
                                   bcount?bcount->GetName():"unknown"));
+               fMemberOffset = 0;
+            } else if (fMemberOffset == TVirtualStreamerInfo::kMissing) {
+               Error("Setup", "%s",
+                     Form("Missing data member in a TClonesArray, %s in %s and %s", fDataMember.Data(),
+                          fBranch->GetName(), bcount ? bcount->GetName() : "unknown"));
+               fMemberOffset = 0;
             }
 
-         } else if (fClass) {
+         } else if (fParent && fClass) {
 
             fElement = (TStreamerElement*)
                fClass->GetStreamerInfo()->GetElements()->FindObject(fDataMember);
-            if (fElement)
+            if (fElement) {
                fMemberOffset = fElement->GetOffset();
-            else {
+               fValueSize = fElement->GetSize();
+            } else {
                // Need to compose the proper sub name
 
                TString member;
 
                member += fDataMember;
                fMemberOffset = fClass->GetDataMemberOffset(member);
-
             }
+            if (fMemberOffset < 0) {
+               Error("Setup", "%s",
+                     Form("Negative offset %d for %s in %s, class: %s", fMemberOffset, fDataMember.Data(),
+                          fBranch->GetName(), fClass->GetName()));
+               fMemberOffset = 0;
+            } else if (fMemberOffset == TVirtualStreamerInfo::kMissing) {
+               Error("Setup", "%s",
+                     Form("Missing data member %s in %s, class: %s", fDataMember.Data(), fBranch->GetName(),
+                          fClass->GetName()));
+               fMemberOffset = 0;
+            }
+
          // The extra condition (fElement is not a TStreamerSTL) is to handle the case where fBranch is a
          // TBranchElement and fElement is a TStreamerSTL. Without the extra condition we get an error
          // message, although the vector (i.e. the TBranchElement) is accessible.
-         } else if (fBranch->IsA() != TBranch::Class() && fElement->IsA() != TStreamerBasicType::Class()
-                    && fElement->IsA() != TStreamerSTL::Class()) {
-            Error("Setup","%s",Form("Missing TClass object for %s\n",fClassName.Data()));
+         } else if (fParent && fBranch->IsA() != TBranch::Class() && fElement->IsA() != TStreamerBasicType::Class() &&
+                    fElement->IsA() != TStreamerSTL::Class()) {
+            Error("Setup", "%s", Form("Missing TClass object for %s", fClassName.Data()));
          }
 
          if ( fBranch->IsA()==TBranchElement::Class()

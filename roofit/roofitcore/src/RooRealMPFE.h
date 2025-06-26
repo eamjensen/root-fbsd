@@ -1,3 +1,5 @@
+/// \cond ROOFIT_INTERNAL
+
 /*****************************************************************************
  * Project: RooFit                                                           *
  * Package: RooFitCore                                                       *
@@ -31,7 +33,7 @@ public:
   // Constructors, assignment etc
   RooRealMPFE(const char *name, const char *title, RooAbsReal& arg, bool calcInline=false) ;
   RooRealMPFE(const RooRealMPFE& other, const char* name=nullptr);
-  TObject* clone(const char* newname) const override { return new RooRealMPFE(*this,newname); }
+  TObject* clone(const char* newname=nullptr) const override { return new RooRealMPFE(*this,newname); }
   ~RooRealMPFE() override;
 
   void calculate() const ;
@@ -88,3 +90,5 @@ public:
 };
 
 #endif
+
+/// \endcond

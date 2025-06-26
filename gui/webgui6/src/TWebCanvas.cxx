@@ -21,6 +21,7 @@
 #include "TStyle.h"
 #include "TCanvas.h"
 #include "TButton.h"
+#include "TSlider.h"
 #include "TFrame.h"
 #include "TPaveText.h"
 #include "TPaveStats.h"
@@ -41,6 +42,8 @@
 #include "TEnv.h"
 #include "TError.h"
 #include "TGraph.h"
+#include "TGraphPolar.h"
+#include "TGraphPolargram.h"
 #include "TGraph2D.h"
 #include "TGaxis.h"
 #include "TScatter.h"
@@ -213,9 +216,11 @@ TWebCanvas::TWebCanvas(TCanvas *c, const char *name, Int_t x, Int_t y, UInt_t wi
 
 TWebCanvas::~TWebCanvas()
 {
+   if(fWindow)
+      fWindow->Reset();
+
    delete fTimer;
 }
-
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /// Add font to static list of fonts supported by the canvas
@@ -319,6 +324,8 @@ Bool_t TWebCanvas::IsJSSupportedClass(TObject *obj, Bool_t many_primitives)
                             {"TPave", true},
                             {"TGaxis"},
                             {"TPave", true},
+                            {"TButton", true},
+                            {"TSlider", true},
                             {"TArrow"},
                             {"TBox", false, true},  // can be handled via TWebPainter, disable for large number of primitives (like in greyscale.C)
                             {"TWbox"}, // some extra calls which cannot be handled via TWebPainter
@@ -326,6 +333,7 @@ Bool_t TWebCanvas::IsJSSupportedClass(TObject *obj, Bool_t many_primitives)
                             {"TEllipse", true, true},  // can be handled via TWebPainter, disable for large number of primitives (like in greyscale.C)
                             {"TText"},
                             {"TLatex"},
+                            {"TLink"},
                             {"TAnnotation"},
                             {"TMathText"},
                             {"TMarker"},
@@ -366,7 +374,7 @@ Bool_t TWebCanvas::IsJSSupportedClass(TObject *obj, Bool_t many_primitives)
 /// If custom path was configured in RWebWindowsManager::AddServerLocation, it can be used in module paths.
 /// If started with "load:" prefix, code will be loaded with `loadScript` function of JSROOT (old, deprecated way)
 /// Script also can be a plain JavaScript code which imports JSROOT and provides draw function for custom classes
-/// See tutorials/webgui/custom/custom.mjs demonstrating such example
+/// See tutorials/visualisation/webgui/custom/custom.mjs demonstrating such example
 
 void TWebCanvas::SetCustomScripts(const std::string &src)
 {
@@ -527,6 +535,8 @@ void TWebCanvas::CreateObjectSnapshot(TPadWebSnapshot &master, TPad *pad, TObjec
    TVirtualPS *saveps = gVirtualPS;
 
    TWebPS ps;
+   ps.GetPainting()->SetClassName(obj->ClassName());
+   ps.GetPainting()->SetObjectName(obj->GetName());
    gVirtualPS = masterps ? masterps : &ps;
    if (painter)
       painter->SetPainting(ps.GetPainting());
@@ -672,6 +682,9 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
    TObject *obj = nullptr;
    TFrame *frame = nullptr;
    TPaveText *title = nullptr;
+   TGraphPolar *first_polar = nullptr;
+   TGraphPolargram *polargram = nullptr;
+   TString polargram_drawopt = "-";
    bool need_frame = false, has_histo = false, need_palette = false;
    std::string need_title;
 
@@ -728,10 +741,23 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
             need_title = obj->GetTitle();
          if (checkNeedPalette(static_cast<TH1*>(obj), opt))
             need_palette = true;
+      } else if (obj->InheritsFrom(TGraphPolar::Class())) {
+         auto polar = static_cast<TGraphPolar *> (obj);
+         if (!first_polar) {
+            first_polar = polar;
+            need_title = first_polar->GetTitle();
+            polargram = first_polar->GetPolargram();
+            if (!polargram) {
+               polargram = first_polar->CreatePolargram(opt);
+               polargram_drawopt = opt.Contains("N") ? "N" : "";
+               if (opt.Contains("O")) polargram_drawopt.Append("O");
+            }
+         }
+         polar->SetPolargram(polargram);
       } else if (obj->InheritsFrom(TGraph::Class())) {
          if (opt.Contains("A")) {
             need_frame = true;
-            if (!has_histo && (strlen(obj->GetTitle()) > 0))
+            if (!has_histo && (strlen(obj->GetTitle()) > 0) && !obj->TestBit(TH1::kNoTitle))
                need_title = obj->GetTitle();
          }
       } else if (obj->InheritsFrom(TGraph2D::Class())) {
@@ -742,12 +768,25 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
          if (strlen(obj->GetTitle()) > 0)
             need_title = obj->GetTitle();
       } else if (obj->InheritsFrom(TF1::Class())) {
-         need_frame = !obj->InheritsFrom(TF2::Class());
-         if (!has_histo && (strlen(obj->GetTitle()) > 0))
-            need_title = obj->GetTitle();
+         if (!opt.Contains("SAME")) {
+            need_frame = !obj->InheritsFrom(TF2::Class());
+            if (!has_histo && (strlen(obj->GetTitle()) > 0))
+               need_title = obj->GetTitle();
+         }
       } else if (obj->InheritsFrom(TPaveText::Class())) {
          if (strcmp(obj->GetName(), "title") == 0)
             title = static_cast<TPaveText *>(obj);
+      } else if (obj->InheritsFrom(TButton::Class())) {
+         auto btn = (TButton *) obj;
+         auto text = dynamic_cast<TText *> (btn->GetListOfPrimitives()->First());
+         if (text) {
+            text->SetTitle(btn->GetTitle());
+            text->SetTextSize(btn->GetTextSize());
+            text->SetTextFont(btn->GetTextFont());
+            text->SetTextAlign(btn->GetTextAlign());
+            text->SetTextColor(btn->GetTextColor());
+            text->SetTextAngle(btn->GetTextAngle());
+         }
       }
    }
 
@@ -757,7 +796,7 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
 
       frame = pad->GetFrame();
       if(frame)
-         primitives->AddFirst(frame);
+         primitives->AddFirst(frame, "");
    }
 
    if (!need_title.empty() && gStyle->GetOptTitle()) {
@@ -776,9 +815,12 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
             title->SetTextSize(gStyle->GetTitleFontSize());
          title->AddText(need_title.c_str());
          title->SetBit(kCanDelete);
-         primitives->Add(title);
+         primitives->Add(title, title->GetOption());
       }
    }
+
+   if (polargram && (polargram_drawopt != "-"))
+      primitives->Add(polargram, polargram_drawopt);
 
    auto flush_master = [&]() {
       if (!usemaster || masterps.IsEmptyPainting()) return;
@@ -820,7 +862,7 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
 
    auto create_stats = [&]() {
       TPaveStats *stats = nullptr;
-      if ((gStyle->GetOptStat() > 0) && CanCreateObject("TPaveStats")) {
+      if (CanCreateObject("TPaveStats")) {
          stats = new TPaveStats(
                         gStyle->GetStatX() - gStyle->GetStatW(),
                         gStyle->GetStatY() - gStyle->GetStatH(),
@@ -869,9 +911,11 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
         }
       }
 
-      if (!stats && has_tf1 && gr && !gr->TestBit(TGraph::kNoStats)) {
+      if (!stats && has_tf1 && gr && !gr->TestBit(TGraph::kNoStats) && (gStyle->GetOptFit() > 0)) {
          stats = create_stats();
          if (stats) {
+            stats->SetOptStat(0);
+            stats->SetOptFit(gStyle->GetOptFit());
             stats->SetParent(funcs);
             funcs->Add(stats);
          }
@@ -886,7 +930,7 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
       pad_status._has_specials = false;
 
    while ((obj = iter()) != nullptr) {
-      if (obj->InheritsFrom(TPad::Class())) {
+      if (obj->IsA() == TPad::Class()) {
          flush_master();
          CreatePadSnapshot(paddata.NewSubPad(), (TPad *)obj, version, nullptr);
       } else if (!process_primitives) {
@@ -935,7 +979,7 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
          TString o = hopt;
          o.ToUpper();
 
-         if (!stats && (first_obj || o.Contains("SAMES"))) {
+         if (!stats && (first_obj || o.Contains("SAMES")) && (gStyle->GetOptStat() > 0)) {
             stats = create_stats();
             if (stats) {
                 stats->SetParent(hist);
@@ -957,6 +1001,18 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
             check_cutg_in_options(iter.GetOption());
 
          first_obj = false;
+      } else if (obj->InheritsFrom(TGraphPolar::Class())) {
+         flush_master();
+
+         auto polar = static_cast<TGraphPolar *>(obj);
+
+         check_graph_funcs(polar);
+
+         paddata.NewPrimitive(obj, iter.GetOption()).SetSnapshot(TWebSnapshot::kObject, obj);
+
+         first_obj = false;
+      } else if (obj->InheritsFrom(TGraphPolargram::Class())) {
+         // do nothing, object must be streamed with graphpolar
       } else if (obj->InheritsFrom(TGraph::Class())) {
          flush_master();
 
@@ -968,7 +1024,7 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
 
          // ensure histogram exists on server to draw it properly on clients side
          if (!IsReadOnly() && (first_obj || gropt.Index("A", 0, TString::kIgnoreCase) != kNPOS ||
-               (gropt.Index("X+", 0, TString::kIgnoreCase) != kNPOS) || (gropt.Index("X+", 0, TString::kIgnoreCase) != kNPOS)))
+               (gropt.Index("X+", 0, TString::kIgnoreCase) != kNPOS) || (gropt.Index("Y+", 0, TString::kIgnoreCase) != kNPOS)))
             gr->GetHistogram();
 
          paddata.NewPrimitive(obj, gropt.Data()).SetSnapshot(TWebSnapshot::kObject, obj);
@@ -986,9 +1042,10 @@ void TWebCanvas::CreatePadSnapshot(TPadWebSnapshot &paddata, TPad *pad, Long64_t
             TString gropt = iter.GetOption();
             gropt.ToUpper();
             Bool_t zscale = gropt.Contains("TRI1") || gropt.Contains("TRI2") || gropt.Contains("COL");
-            Bool_t real_draw = gropt.Contains("TRI") || gropt.Contains("LINE") || gropt.Contains("ERR") || gropt.Contains("P0");
+            Bool_t cont5_draw = gropt.Contains("CONT5");
+            Bool_t real_draw = gropt.Contains("TRI") || gropt.Contains("LINE") || gropt.Contains("ERR") || gropt.Contains("P") || cont5_draw;
 
-            TString hopt = !real_draw ? iter.GetOption() : (zscale ? "lego2z" : "lego2");
+            TString hopt = !real_draw ? iter.GetOption() : (cont5_draw ? "" : (zscale ? "lego2z" : "lego2"));
             if (title) hopt.Append(";;use_pad_title");
 
             // if gr2d not draw - let create histogram with correspondent content
@@ -1287,55 +1344,62 @@ void TWebCanvas::Close()
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
+/// Create web window for the canvas
+
+void TWebCanvas::CreateWebWindow()
+{
+   if (fWindow)
+      return;
+
+   fWindow = ROOT::RWebWindow::Create();
+
+   fWindow->SetConnLimit(0); // configure connections limit
+
+   fWindow->SetDefaultPage("file:rootui5sys/canv/canvas6.html");
+
+   fWindow->SetCallBacks(
+      // connection
+      [this](unsigned connid) {
+         if (fWindow->GetConnectionId(0) == connid)
+            fWebConn.emplace(fWebConn.begin() + 1, connid);
+         else
+            fWebConn.emplace_back(connid);
+         CheckDataToSend(connid);
+      },
+      // data
+      [this](unsigned connid, const std::string &arg) {
+         ProcessData(connid, arg);
+         CheckDataToSend();
+      },
+      // disconnect
+      [this](unsigned connid) {
+         unsigned indx = 0;
+         for (auto &c : fWebConn) {
+            if (c.fConnId == connid) {
+               fWebConn.erase(fWebConn.begin() + indx);
+               break;
+            }
+            indx++;
+         }
+      });
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
 /// Show canvas in specified place.
 /// If parameter args not specified, default ROOT web display will be used
 
 void TWebCanvas::ShowWebWindow(const ROOT::RWebDisplayArgs &args)
 {
-   if (!fWindow) {
-      fWindow = ROOT::RWebWindow::Create();
+   CreateWebWindow();
 
-      fWindow->SetConnLimit(0); // configure connections limit
-
-      fWindow->SetDefaultPage("file:rootui5sys/canv/canvas6.html");
-
-      fWindow->SetCallBacks(
-         // connection
-         [this](unsigned connid) {
-            if (fWindow->GetConnectionId(0) == connid)
-               fWebConn.emplace(fWebConn.begin() + 1, connid);
-            else
-               fWebConn.emplace_back(connid);
-            CheckDataToSend(connid);
-         },
-         // data
-         [this](unsigned connid, const std::string &arg) {
-            ProcessData(connid, arg);
-            CheckDataToSend();
-         },
-         // disconnect
-         [this](unsigned connid) {
-            unsigned indx = 0;
-            for (auto &c : fWebConn) {
-               if (c.fConnId == connid) {
-                  fWebConn.erase(fWebConn.begin() + indx);
-                  break;
-               }
-               indx++;
-            }
-         });
-   }
+   if ((args.GetBrowserKind() == ROOT::RWebDisplayArgs::kQt6) || (args.GetBrowserKind() == ROOT::RWebDisplayArgs::kCEF))
+      SetLongerPolling(kTRUE);
 
    auto w = Canvas()->GetWindowWidth(), h = Canvas()->GetWindowHeight();
    if ((w > 0) && (w < 50000) && (h > 0) && (h < 30000))
       fWindow->SetGeometry(w, h);
 
-   if ((args.GetBrowserKind() == ROOT::RWebDisplayArgs::kQt5) ||
-       (args.GetBrowserKind() == ROOT::RWebDisplayArgs::kQt6) ||
-       (args.GetBrowserKind() == ROOT::RWebDisplayArgs::kCEF))
-      SetLongerPolling(kTRUE);
-
-   fWindow->Show(args);
+   ROOT::RWebWindow::ShowWindow(fWindow, args);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -1627,10 +1691,15 @@ Bool_t TWebCanvas::DecodePadOptions(const std::string &msg, bool process_execs)
 
          Double_t hmin = 0., hmax = 0.;
 
-         if (r.zx1 == r.zx2)
-            hist->GetXaxis()->SetRange(0, 0);
-         else
-            hist->GetXaxis()->SetRangeUser(r.zx1, r.zx2);
+         auto setAxisRange = [](TAxis *ax, Double_t r1, Double_t r2) {
+            if (r1 != r2)
+               ax->SetRangeUser(r1, r2);
+            else if ((ax->GetFirst() == ax->GetLast()) || ((ax->GetFirst() > 0) && (ax->GetLast() <= ax->GetNbins())))
+               // only if no underflow/overflow bins selected - let reset
+               ax->SetRange(0, 0);
+         };
+
+         setAxisRange(hist->GetXaxis(), r.zx1, r.zx2);
 
          if (hist->GetDimension() == 1) {
             hmin = r.zy1;
@@ -1640,10 +1709,8 @@ Bool_t TWebCanvas::DecodePadOptions(const std::string &msg, bool process_execs)
                hmin = pad->fLogy ? TMath::Power(pad->fLogy < 2 ? 10 : pad->fLogy, r.uy1) : r.uy1;
                hmax = pad->fLogy ? TMath::Power(pad->fLogy < 2 ? 10 : pad->fLogy, r.uy2) : r.uy2;
             }
-         } else if (r.zy1 == r.zy2) {
-            hist->GetYaxis()->SetRange(0, 0);
          } else {
-            hist->GetYaxis()->SetRangeUser(r.zy1, r.zy2);
+            setAxisRange(hist->GetYaxis(), r.zy1, r.zy2);
          }
 
          if (hist->GetDimension() == 2) {
@@ -1655,11 +1722,7 @@ Bool_t TWebCanvas::DecodePadOptions(const std::string &msg, bool process_execs)
                hmax = r.uz2;
             }
          } else if (hist->GetDimension() == 3) {
-            if (r.zz1 == r.zz2) {
-               hist->GetZaxis()->SetRange(0, 0);
-            } else {
-              hist->GetZaxis()->SetRangeUser(r.zz1, r.zz2);
-            }
+            setAxisRange(hist->GetZaxis(), r.zz1, r.zz2);
          }
 
          if (hmin == hmax)
@@ -2013,7 +2076,9 @@ Bool_t TWebCanvas::ProcessData(unsigned connid, const std::string &arg)
             auto btn = (TButton *) pad;
             const char *mthd = btn->GetMethod();
             if (mthd && *mthd) {
-               TVirtualPad::TContext ctxt(gROOT->GetSelectedPad(), kTRUE, kTRUE);
+               auto cpad = gROOT->GetSelectedPad();
+               if (cpad)
+                  cpad->cd();
                gROOT->ProcessLine(mthd);
             }
             return kTRUE;
@@ -2237,7 +2302,7 @@ void TWebCanvas::CheckPadModified(TPad *pad)
 
    TIter iter(pad->GetListOfPrimitives());
    while (auto obj = iter()) {
-      if (obj->InheritsFrom(TPad::Class()))
+      if (obj->IsA() == TPad::Class())
          CheckPadModified(static_cast<TPad *>(obj));
    }
 }
@@ -2761,7 +2826,7 @@ TObject *TWebCanvas::FindPrimitive(const std::string &sid, int idcnt, TPad *pad,
       if (!obj) continue;
 
       if (!search_hist && (TString::Hash(&obj, sizeof(obj)) != id)) {
-         if (obj->InheritsFrom(TPad::Class())) {
+         if (obj->IsA() == TPad::Class()) {
             obj = FindPrimitive(sid, idcnt, (TPad *)obj, objlnk, objpad);
             if (objpad && !*objpad)
                *objpad = pad;
@@ -2854,6 +2919,9 @@ TObject *TWebCanvas::FindPrimitive(const std::string &sid, int idcnt, TPad *pad,
                obj = col->FindObject(funcname.c_str());
             else
                obj = col->At(std::stoi(funcname));
+         } else if (kind.compare("polargram") == 0) {
+            auto polar = dynamic_cast<TGraphPolar *>(obj);
+            obj = polar ? polar->GetPolargram() : nullptr;
          } else if (kind.compare(0,7,"graphs_") == 0) {
             TList *graphs = mg ? mg->GetListOfGraphs() : nullptr;
             obj = graphs ? graphs->At(std::stoi(kind.substr(7))) : nullptr;
@@ -2901,3 +2969,41 @@ TCanvasImp *TWebCanvas::NewCanvas(TCanvas *c, const char *name, Int_t x, Int_t y
    return imp;
 }
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+/// Create TCanvas and assign TWebCanvas implementation to it
+/// Canvas is not displayed automatically, therefore canv->Show() method must be called
+/// Or canvas can be embed in other widgets.
+
+TCanvas *TWebCanvas::CreateWebCanvas(const char *name, const char *title, UInt_t width, UInt_t height)
+{
+   auto canvas = new TCanvas(kFALSE);
+   canvas->SetName(name);
+   canvas->SetTitle(title);
+   canvas->ResetBit(TCanvas::kShowEditor);
+   canvas->ResetBit(TCanvas::kShowToolBar);
+   canvas->SetBit(TCanvas::kMenuBar, kTRUE);
+   canvas->SetCanvas(canvas);
+   canvas->SetBatch(kTRUE); // mark canvas as batch
+   canvas->SetEditable(kTRUE); // ensure fPrimitives are created
+
+   auto imp = static_cast<TWebCanvas *> (NewCanvas(canvas, name, 0, 0, width, height));
+
+   canvas->SetCanvasImp(imp);
+
+   canvas->cd();
+
+   {
+      R__LOCKGUARD(gROOTMutex);
+      auto l1 = gROOT->GetListOfCleanups();
+      if (!l1->FindObject(canvas))
+         l1->Add(canvas);
+      auto l2 = gROOT->GetListOfCanvases();
+      if (!l2->FindObject(canvas))
+         l2->Add(canvas);
+   }
+
+   // ensure creation of web window
+   imp->CreateWebWindow();
+
+   return canvas;
+}

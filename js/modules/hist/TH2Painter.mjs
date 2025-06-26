@@ -78,11 +78,11 @@ function drawTH2PolyLego(painter) {
             try {
                if (pnts.length > 2)
                   faces = THREE.ShapeUtils.triangulateShape(pnts, []);
-            } catch (e) {
+            } catch {
                faces = null;
             }
 
-            if (faces && (faces.length > pnts.length-3)) break;
+            if (faces && (faces.length > pnts.length - 3)) break;
          }
 
          if (faces?.length && pnts) {
@@ -124,7 +124,7 @@ function drawTH2PolyLego(painter) {
             }
          }
 
-         if (z1>z0) {
+         if (z1 > z0) {
             for (let n = 0; n < pnts.length; ++n) {
                const pnt1 = pnts[n], pnt2 = pnts[n > 0 ? n - 1 : pnts.length - 1];
 
@@ -177,21 +177,20 @@ function drawTH2PolyLego(painter) {
       mesh.tip_color = 0x00FF00;
 
       mesh.tooltip = function(/* intersects */) {
-         const p = this.painter, main = p.getFramePainter(),
-             bin = p.getObject().fBins.arr[this.bins_index],
-
-          tip = {
-           use_itself: true, // indicate that use mesh itself for highlighting
-           x1: main.grx(bin.fXmin),
-           x2: main.grx(bin.fXmax),
-           y1: main.gry(bin.fYmin),
-           y2: main.gry(bin.fYmax),
-           z1: this.draw_z0,
-           z2: this.draw_z1,
-           bin: this.bins_index,
-           value: bin.fContent,
-           color: this.tip_color,
-           lines: p.getPolyBinTooltips(this.bins_index)
+         const p = this.painter, fp = p.getFramePainter(),
+               tbin = p.getObject().fBins.arr[this.bins_index],
+         tip = {
+            use_itself: true, // indicate that use mesh itself for highlighting
+            x1: fp.grx(tbin.fXmin),
+            x2: fp.grx(tbin.fXmax),
+            y1: fp.gry(tbin.fYmin),
+            y2: fp.gry(tbin.fYmax),
+            z1: this.draw_z0,
+            z2: this.draw_z1,
+            bin: this.bins_index,
+            value: bin.fContent,
+            color: this.tip_color,
+            lines: p.getPolyBinTooltips(this.bins_index)
          };
 
          return tip;
@@ -210,11 +209,18 @@ class TH2Painter extends TH2Painter2D {
       const main = this.getFramePainter(), // who makes axis drawing
             is_main = this.isMainPainter(), // is main histogram
             histo = this.getHisto();
-      let pr = Promise.resolve(true);
+      let pr = Promise.resolve(true), full_draw = true;
 
       if (reason === 'resize') {
-         if (is_main && main.resize3D()) main.render3D();
-      } else {
+         const res = is_main ? main.resize3D() : false;
+         if (res !== 1) {
+            full_draw = false;
+            if (res)
+               main.render3D();
+         }
+      }
+
+      if (full_draw) {
          const pad = this.getPadPainter().getRootPad(true),
                logz = pad?.fLogv ?? pad?.fLogz;
          let zmult = 1;

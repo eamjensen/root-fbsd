@@ -8,7 +8,6 @@
 
 #include "data.h"
 
-#include "RErrorIgnoreRAII.hxx"
 #include "ROOT/TestSupport.hxx"
 
 #include <memory>
@@ -127,8 +126,6 @@ TEST(TTreeReaderLeafs, LeafList) {
    EXPECT_EQ(6u, vec.GetSize());
    {
       using namespace ROOT::TestSupport;
-      CheckDiagsRAII diagRAII;
-      diagRAII.requiredDiag(kError, "Setup", "Missing TClass object for", false);
       EXPECT_FLOAT_EQ(13., arr[1]);
       EXPECT_DOUBLE_EQ(43., arrU[1]);
    }
@@ -187,9 +184,12 @@ TEST(TTreeReaderLeafs, ArrayWithReaderValue)
    TTreeReader tr(tree.get());
    TTreeReaderValue<double> valueOfArr(tr, "arr");
    {
-      RErrorIgnoreRAII errorIgnRAII;
+      ROOT::TestSupport::CheckDiagsRAII check;
+      check.requiredDiag(kError, "TTreeReaderValueBase", "Must use TTreeReaderArray to read branch", false);
+      check.requiredDiag(kError, "TTreeReaderValueBase", /*The branch xxx*/ "contains data of type", false);
+      check.requiredDiag(kError, "TTreeReaderValue", /*Value reader for xxx*/ "not properly initialized", false);
       tr.Next();
-      *valueOfArr;
+      EXPECT_EQ(valueOfArr.Get(), nullptr);
    }
    EXPECT_FALSE(valueOfArr.IsValid());
 }

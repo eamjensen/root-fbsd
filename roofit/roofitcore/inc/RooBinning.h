@@ -69,7 +69,7 @@ public:
   void addUniform(Int_t nBins, double xlo, double xhi);
   bool removeBoundary(double boundary);
 
-  std::string translateBinNumber(RooFit::Detail::CodeSquashContext &ctx, RooAbsArg const &var, int coef) const override;
+  std::string translateBinNumber(RooFit::Experimental::CodegenContext &ctx, RooAbsArg const &var, int coef) const override;
 
 protected:
 

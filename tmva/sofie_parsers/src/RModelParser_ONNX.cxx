@@ -22,6 +22,9 @@ extern ParserFuncSignature ParseReciprocal;
 extern ParserFuncSignature ParseNeg;
 extern ParserFuncSignature ParseExp;
 extern ParserFuncSignature ParseLog;
+extern ParserFuncSignature ParseSin;
+extern ParserFuncSignature ParseCos;
+extern ParserFuncSignature ParseAbs;
 // Binary operators
 extern ParserFuncSignature ParseAdd;
 extern ParserFuncSignature ParseSub;
@@ -79,8 +82,15 @@ extern ParserFuncSignature ParseTopK;
 extern ParserFuncSignature ParseTile;
 extern ParserFuncSignature ParseSplit;
 extern ParserFuncSignature ParseIf;
-// Decalaration of fused operators
+extern ParserFuncSignature ParsePad;
+extern ParserFuncSignature ParseWhere;
+extern ParserFuncSignature ParseEinsum;
+extern ParserFuncSignature ParseRandom;
+extern ParserFuncSignature ParseScatterElements;
+// Declaration of fused operators
 extern ParserFuseFuncSignature ParseFuseConvAdd;
+extern ParserFuseFuncSignature ParseFuseGemmRelu;
+extern ParserFuseFuncSignature ParseFuseBatchnormRelu;
 extern ParserFuseFuncSignature ParseFuseConvTransposeAdd;
 extern ParserFuseFuncSignature ParseFuseMatMulAdd;
 
@@ -150,6 +160,9 @@ RModelParser_ONNX::RModelParser_ONNX() noexcept : fOperatorsMapImpl(std::make_un
    RegisterOperator("Neg", ParseNeg);
    RegisterOperator("Exp", ParseExp);
    RegisterOperator("Log", ParseLog);
+   RegisterOperator("Sin", ParseSin);
+   RegisterOperator("Cos", ParseCos);
+   RegisterOperator("Abs", ParseAbs);
    // Binary operators
    RegisterOperator("Add", ParseAdd);
    RegisterOperator("Sub", ParseSub);
@@ -213,6 +226,14 @@ RModelParser_ONNX::RModelParser_ONNX() noexcept : fOperatorsMapImpl(std::make_un
    RegisterOperator("Tile", ParseTile);
    RegisterOperator("Split", ParseSplit);
    RegisterOperator("If", ParseIf);
+   RegisterOperator("Pad", ParsePad);
+   RegisterOperator("Where", ParseWhere);
+   RegisterOperator("Einsum", ParseEinsum);
+   RegisterOperator("RandomNormal", ParseRandom);
+   RegisterOperator("RandomNormalLike", ParseRandom);
+   RegisterOperator("RandomUniform", ParseRandom);
+   RegisterOperator("RandomUniformLike", ParseRandom);
+   RegisterOperator("ScatterElements", ParseScatterElements);
 }
 
 // Destructor of the parser
@@ -235,6 +256,8 @@ std::vector<std::string> RModelParser_ONNX::GetRegisteredOperators()
    for (auto &it : fOperatorsMapImpl->fOperatorsMap) {
       ops.emplace_back(it.first);
    }
+   // return sorted list in alphabetical order
+   std::sort(ops.begin(), ops.end());
    return ops;
 }
 
@@ -255,7 +278,7 @@ ETensorType RModelParser_ONNX::GetTensorType(const std::string &name)
 
 // Parse an operator
 std::unique_ptr<ROperator>
-RModelParser_ONNX::ParseOperator(const size_t i, const onnx::GraphProto &graphproto, const std::vector<size_t> &nodes)
+RModelParser_ONNX::ParseOperator(const size_t i, const onnx::GraphProto &graphproto, const std::vector<size_t> &nodes, const std::vector<int> & children)
 {
    if (i >= nodes.size())
       throw std::runtime_error("TMVA::SOFIE - Error in parsing ordered operators " + std::to_string(i) + " is >=  " + std::to_string(nodes.size()));
@@ -265,12 +288,16 @@ RModelParser_ONNX::ParseOperator(const size_t i, const onnx::GraphProto &graphpr
    if (fVerbose)
       std::cout << "Parsing operator " << op_type << std::endl;
 
+   // skip already fused operators
+   if (fFusedOperators[idx]) return nullptr;
+
    // try to fuse with following operator in case it is not last one
-   if (i < nodes.size() - 1) {
-      int idx2 = nodes[i+1];
+   if (children.size() == 1) {
+      int idx2 = children.front();
       if (op_type == "MatMul") {
         // Fuse MatMul and Add
          if (idx2 < graphproto.node_size() && graphproto.node(idx2).op_type() == "Add") {
+            fFusedOperators[idx2] = true;
             return ParseFuseMatMulAdd(*this, graphproto.node(idx), graphproto.node(idx2));
          }
          else {
@@ -280,22 +307,28 @@ RModelParser_ONNX::ParseOperator(const size_t i, const onnx::GraphProto &graphpr
       // Fuse Conv or ConvTranspose without bias and Add
          if (idx2 < graphproto.node_size() && graphproto.node(idx2).op_type() == "Add") {
             if (nodeproto.op_type() == "Conv") {
+               fFusedOperators[idx2] = true;
                return ParseFuseConvAdd(*this, graphproto.node(idx), graphproto.node(idx2));
             } else {
+               fFusedOperators[idx2] = true;
                return ParseFuseConvTransposeAdd(*this, graphproto.node(idx), graphproto.node(idx2));
             }
+         }
+      } else if (nodeproto.op_type() == "Gemm") {
+         // Fuse Gemm with activation operators
+         if (idx2 < graphproto.node_size() && graphproto.node(idx2).op_type() == "Relu") {
+            fFusedOperators[idx2] = true;
+            return ParseFuseGemmRelu(*this, graphproto.node(idx), graphproto.node(idx2));
+         }
+      } else if (nodeproto.op_type() == "BatchNormalization") {
+         if (idx2 < graphproto.node_size() && graphproto.node(idx2).op_type() == "Relu") {
+            fFusedOperators[idx2] = true;
+            return ParseFuseBatchnormRelu(*this, graphproto.node(idx), graphproto.node(idx2));
          }
       }
    }
 
-   // skip then the following Add if it was fused before
-   if (idx > 0 && op_type == "Add") {
-      int idx0 = nodes[i - 1];
-      if (graphproto.node(idx0).op_type() == "MatMul")
-         return nullptr;
-      else if (graphproto.node(idx0).op_type() == "ConvTranspose")
-         return nullptr;
-   }
+
 
    auto it = fOperatorsMapImpl->fOperatorsMap.find(op_type);
    if (it == fOperatorsMapImpl->fOperatorsMap.end()) {
@@ -312,6 +345,21 @@ RModelParser_ONNX::ParseOperator(const size_t i, const onnx::GraphProto &graphpr
 RModel RModelParser_ONNX::Parse(std::string filename, bool verbose)
 {
    fVerbose = verbose;
+
+   fTensorTypeMap.clear();
+
+   auto model = LoadModel(filename);
+   if (!model)
+      throw std::runtime_error("TMVA::SOFIE - Failed to load onnx file " + filename);
+
+   const onnx::GraphProto &graph = model->graph(); // not a memory leak. model freed automatically at the end.
+
+
+   std::time_t ttime = std::time(0);
+   std::tm *gmt_time = std::gmtime(&ttime);
+   std::string parsetime(std::asctime(gmt_time));
+
+   // get name of model (filename without directory name)
    char sep = '/';
 #ifdef _WIN32
    sep = '\\';
@@ -322,34 +370,86 @@ RModel RModelParser_ONNX::Parse(std::string filename, bool verbose)
       filename_nodir = (filename.substr(isep + 1, filename.length() - isep));
    }
 
-
-   GOOGLE_PROTOBUF_VERIFY_VERSION;
-   // model I/O
-   onnx::ModelProto model;
-
-
-   fTensorTypeMap.clear();
-
-   std::fstream input(filename, std::ios::in | std::ios::binary);
-   if (!model.ParseFromIstream(&input)) {
-      throw std::runtime_error("TMVA::SOFIE - Failed to parse onnx file " + filename);
-   }
-
-   const onnx::GraphProto &graph = model.graph(); // not a memory leak. model freed automatically at the end.
-   google::protobuf::ShutdownProtobufLibrary();
-
-   // ONNX version is ir_version()  - model_version() returns 0
-   if (fVerbose) {
-      std::cout << "ONNX Version " << model.ir_version() << std::endl;
-   }
-
-   std::time_t ttime = std::time(0);
-   std::tm *gmt_time = std::gmtime(&ttime);
-   std::string parsetime(std::asctime(gmt_time));
-
    RModel rmodel(filename_nodir, parsetime);
    ParseONNXGraph(rmodel, graph, filename_nodir);
    return rmodel;
+}
+
+std::unique_ptr<onnx::ModelProto> RModelParser_ONNX::LoadModel(std::string filename) {
+
+   GOOGLE_PROTOBUF_VERIFY_VERSION;
+   auto model = std::make_unique<onnx::ModelProto>();
+
+   std::fstream input(filename, std::ios::in | std::ios::binary);
+   if (!model->ParseFromIstream(&input)) {
+      std::cerr << "TMVA::SOFIE - Failed to open onnx file " <<  filename << std::endl;
+      return std::unique_ptr<onnx::ModelProto>();
+   }
+
+   // ONNX version is ir_version()  - model_version() returns 0
+   if (fVerbose) {
+      std::cout << "ONNX Version " << model->ir_version() << std::endl;
+   }
+   google::protobuf::ShutdownProtobufLibrary();
+   return model;
+
+}
+
+void RModelParser_ONNX::CheckGraph(const onnx::GraphProto & graph, int & level, std::map<std::string, int> & missingOperators) {
+   if (fVerbose)
+      std::cout << "\n" << graph.name() << " Graph operator list\n";
+   for (int i = 0; i < graph.node_size(); i++) {
+      const auto & node = graph.node(i);
+      const std::string opType =  node.op_type();
+      if (fVerbose) {
+         std::cout << "\tOperator " << i << " : " << opType << " (" << node.name() << "), " << graph.node(i).input_size()
+                      << " inputs : {";
+            for (int j = 0; j < graph.node(i).input_size(); j++) {
+               std::cout << graph.node(i).input(j);
+               if (j < graph.node(i).input_size() - 1)
+                  std::cout << ", ";
+            }
+         std::cout << " }" << std::endl;
+      }
+      // check if operator exists
+      if (!IsRegisteredOperator(opType))
+         missingOperators[opType] = level;
+      // see if sub-graph exists as node attributes
+      for (int j = 0; j < node.attribute_size(); j++) {
+         const auto & attribute = node.attribute(j);
+         if (attribute.has_g()) {
+            const auto & subGraph = attribute.g();
+            level += 1;
+            CheckGraph(subGraph, level, missingOperators);
+         }
+      }
+   }
+}
+
+bool RModelParser_ONNX::CheckModel(std::string filename, bool verbose) {
+
+   fVerbose = verbose;
+   auto model = LoadModel(filename);
+   if (!model) return false;
+
+   const onnx::GraphProto &graph = model->graph();
+    // Initial operator order
+   if (fVerbose)
+      std::cout << "\nModel operator list " << model->producer_name() << "\n";
+
+   std::map<std::string, int> missingOperators;
+   int level = 1;
+   CheckGraph(graph, level, missingOperators);
+
+   if (!missingOperators.empty()) {
+      std::cout << "List of missing operators for model loaded from file " << filename << std::endl;
+      for (auto & op : missingOperators) {
+         std::cout << op.first << "  " << op.second << std::endl;
+      }
+      return false;
+   }
+   std::cout << "All operators in the loaded model are supported!\n";
+   return true;
 }
 
 void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto & graph, std::string  graphName)
@@ -386,9 +486,6 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
       std::string input_name = valueinfoproto.name();
 
       ETensorType type = static_cast<ETensorType>(valueinfoproto.type().tensor_type().elem_type());
-      if (type != ETensorType::FLOAT && type != ETensorType::INT32 && type != ETensorType::INT64) {
-         throw std::runtime_error("TMVA::SOFIE Data type in input tensor " + input_name + " not supported!\n");
-      }
 
       std::vector<Dim> fShape;
       bool existParam = false;
@@ -512,12 +609,13 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
 
    // make order of nodes:
    if (verbose)
-      std::cout << "\nRe-Order graph operator list\n";
+      std::cout << "\n***********************\nRe-Order graph operator list\n*************************\n";
    std::vector<size_t> nodesOrder;
    nodesOrder.reserve(graph.node_size());
    std::vector<bool> foundNodes(graph.node_size());
+
    // loop at graph inputs
-   //std::map<std::string, int> allInputs;
+   std::map<std::string, int> allInputs;
    for (int i = 0; i < graph.input_size(); i++) {
       allInputs[graph.input(i).name()] = -1;
    }
@@ -530,7 +628,7 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
          bool existInputs = true;
          int input_size = graph.node(i).input_size();
          // special case for Reshape where shape is input and not a weight tensor
-         if (fVerbose )
+         if (fVerbose)
             std::cout << "Checking input of  Node " << i << " : " << graph.node(i).name() << std::endl;
          for (int j = 0; j < input_size; j++) {
             std::string name = graph.node(i).input(j);
@@ -538,10 +636,10 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
             if (!name.empty()) {
                existInputs &= (allInputs.find(name) != allInputs.end() ||
                                allInitializedTensors.find(name) != allInitializedTensors.end());
-               if (fVerbose ) {
+               if (fVerbose) {
                   std::cout << "\t\t input " << name << " "
                      << bool(allInputs.find(name) != allInputs.end()) << "  " <<
-                     bool(allInitializedTensors.find(name) != allInitializedTensors.end()) <<
+                     bool(allInitializedTensors.find(name) != allInitializedTensors.end()) << "  " <<
                      existInputs << std::endl;
                }
             }
@@ -556,6 +654,8 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
             }
             continue;
          }
+
+         // adding node to the currectly ordered list
          if (verbose)
             std::cout << "===> New node " << graph.node(i).op_type() << "  " << graph.node(i).name() << " order " << i << std::endl;
 
@@ -575,19 +675,43 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
       }
    } while ((int)nodesOrder.size() < graph.node_size());
 
-   // scan operators for orders
+
+   // find list of children for each operator (used for fusing oiperators)
+   std::vector<std::vector<int>> nodesChildren(graph.node_size());
+
+   for (int k = 0; k < graph.node_size(); k++) {
+      int i = nodesOrder[k];
+      // compute the number of output for the operators
+      if (graph.node(i).output_size() > 0) nodesChildren[i].reserve(graph.node(i).output_size());
+      for (const auto& output_name : graph.node(i).output()) {
+         // loop on all nodes
+         for (int l = k; l < graph.node_size(); l++) {
+            int j = nodesOrder[l];
+            for (const auto& input_name : graph.node(j).input()) {
+               if (input_name == output_name)
+                  nodesChildren[i].push_back(j);
+            }
+         }
+      }
+   }
+
+   // print lit of order operators with list of inputs and list of children nodes
    if (verbose) {
       std::cout << "\nGraph operator list (re-ordered)\n";
       for (int k = 0; k < graph.node_size(); k++) {
          int i = nodesOrder[k];
-         std::cout << "\tOperator " << i << " : " << graph.node(i).op_type() << " , " << graph.node(i).input_size()
-                   << " inputs : {";
-         for (int j = 0; j < graph.node(i).input_size(); j++) {
+         std::cout << "\tOperator " << i << " : " << graph.node(i).op_type() << " , " << graph.node(i).name() << " input tensors : {";
+            for (int j = 0; j < graph.node(i).input_size(); j++) {
             std::cout << graph.node(i).input(j);
             if (j < graph.node(i).input_size() - 1)
                std::cout << ", ";
          }
-         std::cout << " }" << std::endl;
+         std::cout << " } ";
+         std::cout << " children : {";
+         for ( const auto & ichild : nodesChildren[i]) {
+            std::cout << " [ " << ichild << " " << graph.node(ichild).op_type() << " , " << graph.node(ichild).name() << "]";
+         }
+         std::cout << "}" << std::endl;
       }
    }
 
@@ -595,6 +719,11 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
    if (verbose) {
       std::cout << "Fill RModel with operators...\n";
    }
+
+   // we have to record order of node execution separately to
+   // account for fused operators
+   size_t node_order_exec = 0;
+   fFusedOperators = std::vector<bool>(graph.node_size(), false);
    for (int i = 0; i < graph.node_size(); i++) {
       std::string op_type = graph.node(nodesOrder[i]).op_type();
 
@@ -602,7 +731,7 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
          std::cout << "\t" << i << "  " << nodesOrder[i] << " parsing operator " << op_type << std::endl;
       }
 
-      std::unique_ptr<ROperator> op = ParseOperator(i, graph, nodesOrder);
+      std::unique_ptr<ROperator> op = ParseOperator(i, graph, nodesOrder, nodesChildren[i]);
       if (!op) {
          if (verbose) {
             std::cout << "\t\tskipping operator since it is fused with previous one" << std::endl;
@@ -610,7 +739,7 @@ void RModelParser_ONNX::ParseONNXGraph(RModel & rmodel, const onnx::GraphProto &
          // for skipping the fused nodes like Add after MatMul
          continue;
       }
-      rmodel.AddOperator(std::move(op));
+      rmodel.AddOperator(std::move(op), node_order_exec++);
    }
 
    std::vector<std::string> outputnames;

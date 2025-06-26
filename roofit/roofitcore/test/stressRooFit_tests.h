@@ -79,6 +79,14 @@
 
 #include <iomanip>
 
+// Check if any of the codegen backend is used, to disable tests that are not
+// supported by it yet.
+bool useCodegenBackend()
+{
+   auto backend = RooFit::EvalBackend::defaultValue();
+   return backend == RooFit::EvalBackend::Value::Codegen || backend == RooFit::EvalBackend::Value::CodegenNoGrad;
+}
+
 using namespace RooFit;
 
 // Fitting, plotting, toy data generation on one-dimensional p.d.f
@@ -283,6 +291,7 @@ public:
       : RooUnitTest("Interpreted expression p.d.f.", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -369,6 +378,7 @@ public:
       : RooUnitTest("C++ function binding operator p.d.f", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -933,6 +943,7 @@ public:
       : RooUnitTest("Basic fitting and plotting in ranges", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -996,6 +1007,7 @@ public:
       : RooUnitTest("Extended ML fit in sub range", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -1159,6 +1171,10 @@ public:
 
    bool isTestAvailable() override
    {
+      if (useCodegenBackend()) {
+         return false;
+      }
+
       // only if ROOT was build with fftw3 enabled
       TString conffeatures = gROOT->GetConfigFeatures();
       if (conffeatures.Contains("fftw3")) {
@@ -1496,7 +1512,7 @@ public:
       // ---------------------------------------------------------------------------------------------
 
       // Make subset of experimental data with only y values
-      std::unique_ptr<RooAbsData> expDataY{expDataXY->reduce(y)};
+      std::unique_ptr<RooAbsData> expDataY{expDataXY->reduce(RooFit::SelectVars(y))};
 
       // Generate 10000 events in x obtained from _conditional_ model(x|y) with y values taken from experimental data
       std::unique_ptr<RooDataSet> data{model.generate(x, ProtoData(static_cast<RooDataSet &>(*expDataY)))};
@@ -1660,6 +1676,7 @@ public:
       : RooUnitTest("Conditional use of per-event error p.d.f. F(t|dt)", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -1738,6 +1755,7 @@ public:
       : RooUnitTest("Full per-event error p.d.f. F(t|dt)G(dt)", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -2037,6 +2055,7 @@ public:
       : RooUnitTest("Fit in multiple rectangular ranges", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -2200,6 +2219,7 @@ public:
       : RooUnitTest("Fit with non-rectangular observable boundaries", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -2258,6 +2278,7 @@ public:
       : RooUnitTest("P.d.f. marginalization through integration", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -2453,10 +2474,10 @@ public:
       // -------------------------------------------------------------
 
       // The reduce() function returns a new dataset which is a subset of the original
-      std::unique_ptr<RooAbsData> d1{d.reduce(RooArgSet(x, c))};
-      std::unique_ptr<RooAbsData> d2{d.reduce(RooArgSet(y))};
-      std::unique_ptr<RooAbsData> d3{d.reduce("y>5.17")};
-      std::unique_ptr<RooAbsData> d4{d.reduce(RooArgSet(x, c), "y>5.17")};
+      std::unique_ptr<RooAbsData> d1{d.reduce(SelectVars({x, c}))};
+      std::unique_ptr<RooAbsData> d2{d.reduce(SelectVars(y))};
+      std::unique_ptr<RooAbsData> d3{d.reduce(Cut("y>5.17"))};
+      std::unique_ptr<RooAbsData> d4{d.reduce(SelectVars({x, c}), Cut("y>5.17"))};
 
       regValue(d3->numEntries(), "rf403_nd3");
       regValue(d4->numEntries(), "rf403_nd4");
@@ -2489,7 +2510,7 @@ public:
       //
       // All reduce() methods are interfaced in RooAbsData. All reduction techniques
       // demonstrated on unbinned datasets can be applied to binned datasets as well.
-      std::unique_ptr<RooAbsData> dh2{dh.reduce(y, "x>0")};
+      std::unique_ptr<RooAbsData> dh2{dh.reduce(SelectVars(y), Cut("x>0"))};
 
       // Add dh2 to yframe and redraw
       dh2->plotOn(yframe, LineColor(kRed), MarkerColor(kRed), Name("dh2"));
@@ -2507,6 +2528,7 @@ public:
       : RooUnitTest("Fits with weighted datasets", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -2530,11 +2552,10 @@ public:
       RooFormulaVar wFunc("w", "event weight", "(x*x+10)", x);
 
       // Add column with variable w to previously generated dataset
-      RooRealVar *w = (RooRealVar *)data->addColumn(wFunc);
+      data->addColumn(wFunc);
 
       // Instruct dataset d in interpret w as event weight rather than as observable
-      RooDataSet dataw(data->GetName(), data->GetTitle(), data.get(), *data->get(), nullptr, w->GetName());
-      // data->setWeightVar(*w) ;
+      RooDataSet dataw{data->GetName(), data->GetTitle(), *data->get(), Import(*data), WeightVar("w")};
 
       // U n b i n n e d   M L   f i t   t o   w e i g h t e d   d a t a
       // ---------------------------------------------------------------
@@ -3252,6 +3273,7 @@ public:
       : RooUnitTest("Auxiliary observable constraints", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -3320,6 +3342,7 @@ public:
       : RooUnitTest("Profile Likelihood operator", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -3403,6 +3426,7 @@ public:
       : RooUnitTest("NLL error handling", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -3465,6 +3489,7 @@ public:
       : RooUnitTest("Fit Result functionality", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -3503,28 +3528,6 @@ public:
 
       // Perform fit and save result
       std::unique_ptr<RooFitResult> r{model.fitTo(*data, Save())};
-
-      // V i s u a l i z e   c o r r e l a t i o n   m a t r i x
-      // -------------------------------------------------------
-
-      // Construct 2D color plot of correlation matrix
-      gStyle->SetOptStat(0);
-      gStyle->SetPalette(1);
-      TH2 *hcorr = r->correlationHist();
-
-      // Sample dataset with parameter values according to distribution
-      // of covariance matrix of fit result
-      RooDataSet randPars("randPars", "randPars", r->floatParsFinal());
-      for (int i = 0; i < 10000; i++) {
-         randPars.add(r->randomizePars());
-      }
-
-      // make histogram of 2D distribution in sigma1 vs sig1frac
-      TH1 *hhrand =
-         randPars.createHistogram("hhrand", sigma1, Binning(35, 0.25, 0.65), YVar(sig1frac, Binning(35, 0.3, 1.1)));
-
-      regTH(hcorr, "rf607_hcorr");
-      regTH(hhrand, "rf607_hhand");
 
       return true;
    }
@@ -3766,6 +3769,7 @@ public:
       : RooUnitTest("Efficiency product operator p.d.f", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -3832,6 +3836,7 @@ public:
       : RooUnitTest("Amplitude sum operator p.d.f", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -3914,6 +3919,7 @@ public:
       : RooUnitTest("Linear morph operator p.d.f.", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -4349,6 +4355,7 @@ public:
       : RooUnitTest("Automated MC studies", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 
@@ -4520,6 +4527,7 @@ public:
       : RooUnitTest("MC Study with param rand. and Z calc", refFile, writeRef, verbose)
    {
    }
+   bool isTestAvailable() override { return !useCodegenBackend(); }
    bool testCode() override
    {
 

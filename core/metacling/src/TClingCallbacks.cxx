@@ -84,84 +84,6 @@ extern "C" {
    void TCling__UnlockCompilationDuringUserCodeExecution(void *state);
 }
 
-class AutoloadLibraryMU : public llvm::orc::MaterializationUnit {
-   const TClingCallbacks &fCallbacks;
-   std::string fLibrary;
-   llvm::orc::SymbolNameVector fSymbols;
-public:
-   AutoloadLibraryMU(const TClingCallbacks &cb, const std::string &Library, const llvm::orc::SymbolNameVector &Symbols)
-      : MaterializationUnit({getSymbolFlagsMap(Symbols), nullptr}), fCallbacks(cb), fLibrary(Library), fSymbols(Symbols)
-   {
-   }
-
-   StringRef getName() const override { return "<Symbols from Autoloaded Library>"; }
-
-   void materialize(std::unique_ptr<llvm::orc::MaterializationResponsibility> R) override
-   {
-      if (!fCallbacks.IsAutoLoadingEnabled()) {
-         R->failMaterialization();
-         return;
-      }
-
-      llvm::orc::SymbolMap loadedSymbols;
-      llvm::orc::SymbolNameSet failedSymbols;
-      bool loadedLibrary = false;
-
-      for (auto symbol : fSymbols) {
-         std::string symbolStr = (*symbol).str();
-         std::string nameForDlsym = ROOT::TMetaUtils::DemangleNameForDlsym(symbolStr);
-
-         // Check if the symbol is available without loading the library.
-         void *addr = llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(nameForDlsym);
-
-         if (!addr && !loadedLibrary) {
-            // Try to load the library which should provide the symbol definition.
-            // TODO: Should this interface with the DynamicLibraryManager directly?
-            if (TCling__LoadLibrary(fLibrary.c_str()) < 0) {
-               ROOT::TMetaUtils::Error("AutoloadLibraryMU", "Failed to load library %s", fLibrary.c_str());
-            }
-
-            // Only try loading the library once.
-            loadedLibrary = true;
-
-            addr = llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(nameForDlsym);
-         }
-
-         if (addr) {
-            loadedSymbols[symbol] = {llvm::orc::ExecutorAddr::fromPtr(addr), llvm::JITSymbolFlags::Exported};
-         } else {
-            // Collect all failing symbols, delegate their responsibility and then
-            // fail their materialization. R->defineNonExistent() sounds like it
-            // should do that, but it's not implemented?!
-            failedSymbols.insert(symbol);
-         }
-      }
-
-      if (!failedSymbols.empty()) {
-         auto failingMR = R->delegate(failedSymbols);
-         if (failingMR) {
-            (*failingMR)->failMaterialization();
-         }
-      }
-
-      if (!loadedSymbols.empty()) {
-         llvm::cantFail(R->notifyResolved(loadedSymbols));
-         llvm::cantFail(R->notifyEmitted());
-      }
-   }
-
-   void discard(const llvm::orc::JITDylib &JD, const llvm::orc::SymbolStringPtr &Name) override {}
-
-private:
-   static llvm::orc::SymbolFlagsMap getSymbolFlagsMap(const llvm::orc::SymbolNameVector &Symbols)
-   {
-      llvm::orc::SymbolFlagsMap map;
-      for (auto symbolName : Symbols)
-         map[symbolName] = llvm::JITSymbolFlags::Exported;
-      return map;
-   }
-};
-
 class AutoloadLibraryGenerator : public llvm::orc::DefinitionGenerator {
    const TClingCallbacks &fCallbacks;
    cling::Interpreter *fInterpreter;
@@ -174,7 +96,7 @@ public:
                              const llvm::orc::SymbolLookupSet &Symbols) override
    {
       if (!fCallbacks.IsAutoLoadingEnabled())
-         llvm::Error::success();
+         return llvm::Error::success();
 
       // If we get here, the symbols have not been found in the current process,
       // so no need to check that again. Instead search for the library that
@@ -206,10 +128,27 @@ public:
             found[libName].push_back(name);
       }
 
-      for (auto &&KV : found) {
-         auto MU = std::make_unique<AutoloadLibraryMU>(fCallbacks, KV.first, std::move(KV.second));
-         if (auto Err = JD.define(MU))
-            return Err;
+      llvm::orc::SymbolMap loadedSymbols;
+      for (const auto &KV : found) {
+         // Try to load the library which should provide the symbol definition.
+         // TODO: Should this interface with the DynamicLibraryManager directly?
+         if (TCling__LoadLibrary(KV.first.c_str()) < 0) {
+            ROOT::TMetaUtils::Error("AutoloadLibraryMU", "Failed to load library %s", KV.first.c_str());
+         }
+
+         for (const auto &symbol : KV.second) {
+            std::string symbolStr = (*symbol).str();
+            std::string nameForDlsym = ROOT::TMetaUtils::DemangleNameForDlsym(symbolStr);
+
+            void *addr = llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(nameForDlsym);
+            if (addr) {
+               loadedSymbols[symbol] = {llvm::orc::ExecutorAddr::fromPtr(addr), llvm::JITSymbolFlags::Exported};
+            }
+         }
+      }
+
+      if (!loadedSymbols.empty()) {
+         return JD.define(absoluteSymbols(std::move(loadedSymbols)));
       }
 
       return llvm::Error::success();
@@ -262,7 +201,7 @@ void TClingCallbacks::InclusionDirective(clang::SourceLocation sLoc/*HashLoc*/,
    //    or TH1F in presence of TH1F.h.
    // Strategy 2) is tried only if 1) fails.
 
-   bool isHeaderFile = FileName.endswith(".h") || FileName.endswith(".hxx") || FileName.endswith(".hpp");
+   bool isHeaderFile = FileName.ends_with(".h") || FileName.ends_with(".hxx") || FileName.ends_with(".hpp");
    if (!IsAutoLoadingEnabled() || fIsAutoLoadingRecursively || !isHeaderFile)
       return;
 
@@ -848,7 +787,7 @@ bool TClingCallbacks::tryResolveAtRuntimeInternal(LookupResult &R, Scope *S) {
    // Prevent redundant declarations for control statements (e.g., for, if, while)
    // that have already been annotated.
    if (auto annot = Wrapper->getAttr<AnnotateAttr>())
-      if (annot->getAnnotation().equals("__ResolveAtRuntime") && S->isControlScope())
+      if (annot->getAnnotation() == "__ResolveAtRuntime" && S->isControlScope())
          return false;
 
    VarDecl* Result = VarDecl::Create(C, TU, Loc, Loc, II, C.DependentTy,

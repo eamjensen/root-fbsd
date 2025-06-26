@@ -1,3 +1,5 @@
+/// \cond ROOFIT_INTERNAL
+
 /*****************************************************************************
  * Project: RooFit                                                           *
  * Package: RooFitCore                                                       *
@@ -34,7 +36,7 @@
 #include <fstream>
 #include <iomanip>
 
-using std::cout, std::endl, std::setprecision;
+using std::setprecision;
 
 namespace {
 
@@ -89,11 +91,11 @@ double RooMinimizerFcn::operator()(const double *x) const
 
    // Optional logging
    if (_logfile)
-      (*_logfile) << setprecision(15) << fvalue << setprecision(4) << endl;
+      (*_logfile) << setprecision(15) << fvalue << setprecision(4) << std::endl;
    if (cfg().verbose) {
-      cout << "\nprevFCN" << (_funct->isOffsetting() ? "-offset" : "") << " = " << setprecision(10) << fvalue
+      std::cout << "\nprevFCN" << (_funct->isOffsetting() ? "-offset" : "") << " = " << setprecision(10) << fvalue
            << setprecision(4) << "  ";
-      cout.flush();
+      std::cout.flush();
    }
 
    finishDoEval();
@@ -145,3 +147,5 @@ void RooMinimizerFcn::setOffsetting(bool flag)
 {
    _funct->enableOffsetting(flag);
 }
+
+/// \endcond

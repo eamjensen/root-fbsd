@@ -1,4 +1,4 @@
-gi% ROOT Version 6.34 Release Notes
+% ROOT Version 6.34 Release Notes
 % 2024-11
 <a name="TopOfPage"></a>
 
@@ -300,30 +300,6 @@ TCanvas::SaveAll({c1, c2, c3, c4}, "file.pdf");
 * Add `TStyle::SetLegendFillStyle`
 
 ## 3D Graphics Libraries
-### REve
-
-* Update RenderCore rendering engine to version 1.6 with improved
-implementation of Signed Distance Field (SDF) fonts.
-
-* Implement REveText element to draw text with SDF fonts in screen or
-world coordinates. See the new example in tutorials/eve7/texts.C
-
-*  Add initial version of REve overlays: a 2D area in screen coordinates
-that can draw text and frames in relative proportions; support position
-and scale editing on the client side.
-
-* Draw axis labels with SDF fonts in the mixed space-screen coordinate
-system.
-
-* Introduce REveGeoTopNode: a wrapper over a TGeoNode, possibly
-displaced with a global transformation stored in REveElement. It holds a
-pointer to TGeoManager and controls for steering of TGeoPainter
-(fVisOption, fVisLevel and fMaxVisNodes).
-
-* Integrate JSRoot hierarchical node browser in REve as REveGeoTable
-element. The demonstration of this feature is included in example
-tutorial/eve7/eveGeoBrowser.C
-
 
 ## Geometry Libraries
 
@@ -658,49 +634,11 @@ Published on December 16, 2024
 
 ### Items addressed in this release
 
-This release includes a few minor fixes in RDataFrame and RooFit, besides the items below. Moreover, built-in Davix was patched to build with GCC14 while waiting for the new Davix release.
+This release includes a few minor fixes in RDataFrame and RooFit, besides the item below. Moreover, built-in Davix was patched to build with GCC14 while waiting for the new Davix release.
 
 * [[#17145](https://github.com/root-project/root/issues/17145)] - Distributed RDataFrame cannot deal with same column name in different branches
 - [[#17190](https://github.com/root-project/root/issues/17190)] - Compiler error with GCC 14.2.0 related to Davix
 * [[#17222](https://github.com/root-project/root/issues/17222)] - Regression in Python ownership for histograms within subdirectories with ROOT 6.34.00
 - [[#17223](https://github.com/root-project/root/issues/17223)] - TFileMerger leaves files open resulting in corrupt metadata
-
-## Release 6.34.04
-
-Published on February 10, 2025
-
-### Items addressed in this release
-
-This branch includes a few minor fixes in RDataFrame, as well as a mechanism was added to specify binding options when opening sockets with TSocketServer. 
-Moreover, the items listed below were addressed:
-
-* [[ROOT-7372](https://its.cern.ch/jira/browse/ROOT-7372)] - Accessing complex map branches crashes in PyROOT
-* [[ROOT-10482](https://its.cern.ch/jira/browse/ROOT-10482)] - pullHist and residHist biased
-* [[#12841](https://github.com/root-project/root/issues/12841)] - [ntuple] prefer IO constructor in RField<user class>::GenerateValue()
-* [[#14007](https://github.com/root-project/root/issues/14007)] - Cannot create a RNtuple into a TDirectory
-* [[#15473](https://github.com/root-project/root/issues/15473)] - Segmentation fault when building with the mold linker
-* [[#16189](https://github.com/root-project/root/issues/16189)] - TFile::k630forwardCompatibility does not apply to new files correctly
-* [[#16560](https://github.com/root-project/root/issues/16560)] - Issue using TColor and saving canvas to ROOT format
-* [[#17291](https://github.com/root-project/root/issues/17291)] - [RF] Parameter ordering bug in RooFormulaArgStreamer
-* [[#17305](https://github.com/root-project/root/issues/17305)] - The ONNX.Tile5D test in tmva/sofie/test/TestCustomModelsFromONNX.cxx writes array elements beyond the last element in the array
-* [[#17321](https://github.com/root-project/root/issues/17321)] - [RF] Unused Class rule
-* [[#17442](https://github.com/root-project/root/issues/17442)] - [Python] Regression in `std::bytes` support with cppyy inside ROOT
-* [[#17444](https://github.com/root-project/root/issues/17444)] - ROOT doesn't compile with gcc-15
-* [[#17472](https://github.com/root-project/root/issues/17472)] - RooEllipse not drawn in notebooks with `%jsroot on`
-
-## Release 6.34.06
-
-Published on March 27, 2025
-
-### Items addressed in this release
-
-This branch includes minor bugfixes and changes in the code to adapt it to the evolving ROOT's testing infrastructure. Notable examples are the reduced dependency on the webserver of ROOT's tests or changes required by ATLAS FastFrames framework. JSRoot has been updated to version [[7.8.2](https://github.com/root-project/jsroot/releases/tag/7.8.2)].
-
-The following items were addressed:
-
-* [[#10096](https://github.com/root-project/root/issues/10096)] - heap-use-after-free in ~TTreeReader
-* [[#17456](https://github.com/root-project/root/issues/17456)] - Test failures when compiling ROOT with gcc 15
-* [[#17753](https://github.com/root-project/root/issues/17753)] - Race condition in TClass::fStreamerImpl value for emulated classes.
-* [[#17992](https://github.com/root-project/root/issues/17992)] - Spurrious auto parsing when looking up a TClass
 
 ## HEAD of the v6-34-00-patches branch

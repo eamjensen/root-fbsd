@@ -20,10 +20,13 @@
 #include "TApplication.h"
 #include "TColorGradient.h"
 #include "snprintf.h"
+
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
 
 ClassImp(TColor);
 
@@ -46,6 +49,8 @@ static Int_t   gHighestColorIndex = 0;   ///< Highest color index defined
 static Float_t gColorThreshold    = -1.; ///< Color threshold used by GetColor
 static Int_t   gDefinedColors     = 0;   ///< Number of defined colors.
 static Int_t   gLastDefinedColors = 649; ///< Previous number of defined colors
+static Int_t   gPaletteType = 0;         ///< selected palete type
+
 
 #define fgGrayscaleMode TColor__GrayScaleMode()
 #define fgPalette TColor__Palette()
@@ -206,10 +211,10 @@ These three color schemes are available as color sets with 6, 8, and 10 colors, 
 (`P` for Petroff or Preferred).
 
 Begin_Macro
-../../../tutorials/graphics/accessiblecolorschemes.C
+../../../tutorials/visualisation/graphics/accessiblecolorschemes.C
 End_Macro
 
-The example thstackcolorscheme.C illustrates how to use these color schemes in THStack drawings.
+The example hist026_THStack_color_scheme.C illustrates how to use these color schemes in THStack drawings.
 It also demonstrates that they are effective in grayscale.
 
 \anchor C04
@@ -312,7 +317,7 @@ display plots using different palettes on the same pad.
 The tutorial multipalette.C illustrates this feature.
 
 Begin_Macro(source)
-../../../tutorials/graphs/multipalette.C
+../../../tutorials/visualisation/graphics/multipalette.C
 End_Macro
 
 \since **6.26:**
@@ -358,8 +363,9 @@ As explained in [Crameri, F., Shephard, G.E. & Heron, P.J. The misuse of colour 
 Nat Commun 11, 5444 (2020)](https://doi.org/10.1038/s41467-020-19160-7) some color maps
 can visually distord data, specially for people with colour-vision deficiencies.
 
-For instance one can immediately see the [disadvantages of the Rainbow color map](https://root.cern.ch/rainbow-color-map),
-which is misleading for colour-blinded people in a 2D plot (not so much in a 3D surfaces).
+For instance one can immediately see the [disadvantages of the Rainbow color
+map](https://root.cern.ch/rainbow-color-map), which is misleading for colour-blinded people in a 2D plot (not so much in
+a 3D surfaces).
 
 The `kCMYK` palette, is also not great because it's dark, then lighter, then
 half-dark again. Some others, like `kAquamarine`, have almost no contrast therefore it would
@@ -1051,7 +1057,7 @@ Or if you prefer to activate GL for a single canvas `c`, then use `c->SetSupport
 The following macro gives an example of transparency usage:
 
 Begin_Macro(source)
-../../../tutorials/graphics/transparency.C
+../../../tutorials/visualisation/graphics/transparency.C
 End_Macro
 
 */
@@ -1911,7 +1917,8 @@ void TColor::Allocate()
 ////////////////////////////////////////////////////////////////////////////////
 /// Static method returning color number for color specified by
 /// hex color string of form: "#rrggbb", where rr, gg and bb are in
-/// hex between [0,FF], e.g. "#c0c0c0".
+/// hex between [0,FF], e.g. "#c0c0c0". Also alpha channel is applied when
+/// hex string includes fourth number e.g "#c0c0c0ff"
 ///
 /// The color retrieval is done using a threshold defined by SetColorThreshold.
 ///
@@ -1921,8 +1928,10 @@ void TColor::Allocate()
 Int_t TColor::GetColor(const char *hexcolor)
 {
    if (hexcolor && *hexcolor == '#') {
-      Int_t r, g, b;
-      if (sscanf(hexcolor+1, "%02x%02x%02x", &r, &g, &b) == 3)
+      Int_t r, g, b, a;
+      if (strlen(hexcolor) == 9 && sscanf(hexcolor + 1, "%02x%02x%02x%02x", &r, &g, &b, &a) == 4)
+         return GetColor(r, g, b, a / 255.);
+      if (sscanf(hexcolor + 1, "%02x%02x%02x", &r, &g, &b) == 3)
          return GetColor(r, g, b);
    }
    ::Error("TColor::GetColor(const char*)", "incorrect color string");
@@ -2399,7 +2408,7 @@ void TColor::ListColors(Int_t ci, Int_t nb, Bool_t showEmpty)
    const Int_t ncolors = colors->GetSize();
    Int_t last = ci+nb;
    if (nb==0 || last>=ncolors) last = ncolors;
-   TColor *color = 0;
+   TColor *color = nullptr;
    Int_t nc =0 ;
 
    printf("   +------+-------+-------+-------+-------+--------------------+--------------------+\n");
@@ -2424,7 +2433,7 @@ void TColor::ListColors(Int_t ci, Int_t nb, Bool_t showEmpty)
    printf("   +------+-------+-------+-------+-------+--------------------+--------------------+\n");
    printf("   | Number of possible colors = %4d                                               |\n",ncolors);
    printf("   | Number of defined colors between %4d and %4d = %4d                          |\n",ci,last,nc);
-   printf("   | Number of free indeces between %4d and %4d   = %4d                          |\n",ci,last,last-ci-nc);
+   printf("   | Number of free indices between %4d and %4d   = %4d                          |\n",ci,last,last-ci-nc);
    printf("   +--------------------------------------------------------------------------------+\n\n");
 
 }
@@ -2483,9 +2492,9 @@ ULong_t TColor::RGB2Pixel(Int_t r, Int_t g, Int_t b)
    if (b > 255) b = 255;
 
    ColorStruct_t color;
-   color.fRed   = UShort_t(r * 257);  // 65535/255
-   color.fGreen = UShort_t(g * 257);
-   color.fBlue  = UShort_t(b * 257);
+   color.fRed   = UShort_t(r * 256);  // 65536/256
+   color.fGreen = UShort_t(g * 256);
+   color.fBlue  = UShort_t(b * 256);
    color.fMask  = kDoRed | kDoGreen | kDoBlue;
    gVirtualX->AllocColor(gVirtualX->GetColormap(), color);
    return color.fPixel;
@@ -2516,9 +2525,13 @@ void TColor::Pixel2RGB(ULong_t pixel, Int_t &r, Int_t &g, Int_t &b)
    ColorStruct_t color;
    color.fPixel = pixel;
    gVirtualX->QueryColor(gVirtualX->GetColormap(), color);
-   r = color.fRed / 257;
-   g = color.fGreen / 257;
-   b = color.fBlue / 257;
+   // color is between 0 and 65535 inclusive.
+   // We need to move it to the 0 to 255 range (inclusive).
+   // So we need to resample the 65536 values into 256 indices.
+   // This would mean equal blocks of 256 high-res values per color index.
+   r = color.fRed / 256;
+   g = color.fGreen / 256;
+   b = color.fBlue / 256;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2538,44 +2551,44 @@ const char *TColor::PixelAsHexString(ULong_t pixel)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Save a color with index > 228 as a C++ statement(s) on output stream out.
-/// Return kFALSE if color not saved in the output stream
+/// Convert color in C++ statement which can be used in SetColor directives
+/// Produced statement either includes TColor::GetColor() invocation or just plain color index as integer
+/// Method should be used is SavePrimitive methods for color storage
 
-Bool_t TColor::SaveColor(std::ostream &out, Int_t ci)
+TString TColor::SavePrimitiveColor(Int_t ci)
 {
-   if (ci <= 228)
-      return kFALSE;
-
-   char quote = '"';
-
-   TColor *c = gROOT->GetColor(ci);
+   TColor *c = ci <= 228 ? nullptr : gROOT->GetColor(ci);
    if (!c)
-      return kFALSE;
-
-   if (gROOT->ClassSaved(TColor::Class())) {
-      out << std::endl;
-   } else {
-      out << std::endl;
-      out << "   Int_t ci;      // for color index setting" << std::endl;
-      out << "   TColor *color; // for color definition with alpha" << std::endl;
-   }
+      return TString::Format("%d", ci);
 
    Float_t r, g, b, a;
 
    c->GetRGB(r, g, b);
    a = c->GetAlpha();
+   Int_t ri = (Int_t)(255 * r), gi = (Int_t)(255 * g), bi = (Int_t)(255 * b), ai = (Int_t)(255 * a);
 
-   if (a < 1.) {
-      out<<"   ci = "<<ci<<";"<<std::endl;
-      out<<"   color = new TColor(ci, "<<r<<", "<<g<<", "<<b<<", "
-      <<"\" \", "<<a<<");"<<std::endl;
-   } else {
-      Int_t ri = (Int_t)(255*r),
-            gi = (Int_t)(255*g),
-            bi = (Int_t)(255*b);
-      TString cname = TString::Format("#%02x%02x%02x", ri, gi, bi);
-      out<<"   ci = TColor::GetColor("<<quote<<cname.Data()<<quote<<");"<<std::endl;
-   }
+   if (ai < 255)
+      return TString::Format("TColor::GetColor(\"#%02x%02x%02x%02x\")", ri, gi, bi, ai);
+
+   return TString::Format("TColor::GetColor(\"#%02x%02x%02x\")", ri, gi, bi);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Save a color with index > 228 as a C++ statement(s) on output stream out.
+/// Return kFALSE if color not saved in the output stream
+/// Consider use of SavePrimitiveColor() method instead
+
+Bool_t TColor::SaveColor(std::ostream &out, Int_t ci)
+{
+   if ((ci <= 228) || !gROOT->GetColor(ci))
+      return kFALSE;
+
+   if (gROOT->ClassSaved(TColor::Class()))
+      out << "   ci = ";
+   else
+      out << "   Int_t ci = ";
+
+   out << SavePrimitiveColor(ci) << ";\n";
 
    return kTRUE;
 }
@@ -2923,8 +2936,6 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
 {
    Int_t i;
 
-   static Int_t paletteType = 0;
-
    Int_t palette[50] = {19,18,17,16,15,14,13,12,11,20,
                         21,22,23,24,25,26,27,28,29,30, 8,
                         31,32,33,34,35,36,37,38,39,40, 9,
@@ -2936,7 +2947,7 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
       ncolors = 50;
       fgPalette.Set(ncolors);
       for (i=0;i<ncolors;i++) fgPalette.fArray[i] = palette[i];
-      paletteType = 1;
+      gPaletteType = 1;
       return;
    }
 
@@ -2946,7 +2957,7 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
       fgPalette.Set(ncolors);
       for (i=0;i<ncolors-1;i++) fgPalette.fArray[i] = 51+i;
       fgPalette.fArray[ncolors-1] = kRed; // the last color of this palette is red
-      paletteType = 2;
+      gPaletteType = 2;
       return;
    }
 
@@ -2960,10 +2971,10 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
       if (Idx > 0) {
          Double_t alphas = 10*(fgPalettesList.fArray[ncolors-51]-Idx);
          Bool_t same_alpha = TMath::Abs(alpha-alphas) < 0.0001;
-         if (paletteType == ncolors && same_alpha) return; // The current palette is already this one.
+         if (gPaletteType == ncolors && same_alpha) return; // The current palette is already this one.
          fgPalette.Set(255); // High quality palettes have 255 entries
          for (i=0;i<255;i++) fgPalette.fArray[i] = Idx+i;
-         paletteType = ncolors;
+         gPaletteType = ncolors;
 
          // restore the palette transparency if needed
           if (alphas>0 && !same_alpha) {
@@ -2972,7 +2983,7 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
                 ca = gROOT->GetColor(Idx+i);
                 ca->SetAlpha(alpha);
              }
-             fgPalettesList.fArray[paletteType-51] = (Double_t)Idx+alpha/10.;
+             fgPalettesList.fArray[gPaletteType-51] = (Double_t)Idx+alpha/10.;
           }
          return;
       }
@@ -3615,10 +3626,10 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
          ::Error("SetPalette", "Unknown palette number %d", ncolors);
          return;
       }
-      paletteType = ncolors;
-      if (Idx>0) fgPalettesList.fArray[paletteType-51] = (Double_t)Idx;
-      else       fgPalettesList.fArray[paletteType-51] = 0.;
-      if (alpha > 0.) fgPalettesList.fArray[paletteType-51] += alpha/10.0f;
+      gPaletteType = ncolors;
+      if (Idx>0) fgPalettesList.fArray[gPaletteType-51] = (Double_t)Idx;
+      else       fgPalettesList.fArray[gPaletteType-51] = 0.;
+      if (alpha > 0.) fgPalettesList.fArray[gPaletteType-51] += alpha/10.0f;
       return;
    }
 
@@ -3630,9 +3641,32 @@ void TColor::SetPalette(Int_t ncolors, Int_t *colors, Float_t alpha)
       fgPalette.Set(TMath::Min(50,ncolors));
       for (i=0;i<TMath::Min(50,ncolors);i++) fgPalette.fArray[i] = palette[i];
    }
-   paletteType = 3;
+   gPaletteType = 3;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// Store current palette in the output macro
+
+void TColor::SaveColorsPalette(std::ostream &out)
+{
+   if ((gPaletteType == 1) || (gPaletteType == 2))
+      out << "   TColor::SetPalette(" << (gPaletteType - 1) << ", nullptr);\n";
+   else if ((gPaletteType == 3) && (fgPalette.fN <= 50)) {
+      out << "   TColor::SetPalette(" << fgPalette.fN << ", (Int_t []) ";
+      for (int i = 0; i < fgPalette.fN; i++)
+         out << (i == 0 ? "{ " : ", ") << TColor::SavePrimitiveColor(fgPalette.fArray[i]);
+      out << " });\n";
+   } else if (gPaletteType > 50) {
+      out << "   TColor::SetPalette(" << gPaletteType << ", nullptr";
+
+      Int_t Idx = (Int_t)fgPalettesList.fArray[gPaletteType - 51];
+      Double_t alphas = 10 * (fgPalettesList.fArray[gPaletteType - 51] - Idx);
+
+      if (alphas < 1)
+         out << ", " << alphas;
+      out << ");\n";
+   }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Invert the current color palette.
@@ -3642,3 +3676,44 @@ void TColor::InvertPalette()
 {
    std::reverse(fgPalette.fArray, fgPalette.fArray + fgPalette.GetSize());
 }
+
+////////////////////////////////////////////////////////////////////////////////
+/// The `color` string argument argument will be evaluated
+/// to get the actual ROOT color number, like `kRed`.
+/// Here is how the string is parsed:
+///
+///   1. Match against single-character color codes following the matplotlib convention.
+///      For example, to get red color (equivalent to `kRed`):
+///      ~~~ {.cxx}
+///      hist.SetLineColor("r")
+///      ~~~
+///   2. Check if the string matches an en existing TColor name (see TColor::GetColorByName()).
+///      For example:
+///      ~~~ {.cxx}
+///      hist.SetLineColor("kRed+1")
+///      ~~~
+///
+/// In case no corresponding color is found, a `std::invalid_argument` exception is thrown.
+TColorNumber::TColorNumber(std::string const &color)
+{
+   using Map = std::unordered_map<std::string, Int_t>;
+   // Color dictionary to define matplotlib conventions
+   static Map colorMap{{"r", kRed},   {"b", kBlue},  {"g", kGreen},   {"y", kYellow},
+                       {"w", kWhite}, {"k", kBlack}, {"m", kMagenta}, {"c", kCyan}};
+   auto found = colorMap.find(color);
+   if (found != colorMap.end()) {
+      fNumber = found->second;
+      return;
+   }
+
+   fNumber = TColor::GetColorByName(color.c_str());
+   if (fNumber == -1) {
+      std::stringstream msg;
+      msg << "\"" << color << "\" is not a valid color name";
+      throw std::invalid_argument(msg.str());
+   }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Instantiate a color from a tuple of RGB values between 0.0 and 1.0.
+TColorNumber::TColorNumber(std::array<Float_t, 3> rgb) : fNumber{TColor::GetColor(rgb[0], rgb[1], rgb[2])} {}

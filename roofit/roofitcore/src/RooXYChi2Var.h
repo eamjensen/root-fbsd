@@ -1,3 +1,5 @@
+/// \cond ROOFIT_INTERNAL
+
 /*
  * Project: RooFit
  *
@@ -32,7 +34,7 @@ public:
   /// \endcond ROOFIT_INTERNAL
 
   RooXYChi2Var(const RooXYChi2Var& other, const char* name=nullptr);
-  TObject* clone(const char* newname) const override { return new RooXYChi2Var(*this,newname); }
+  TObject* clone(const char* newname=nullptr) const override { return new RooXYChi2Var(*this,newname); }
 
   RooAbsTestStatistic* create(const char *name, const char *title, RooAbsReal& pdf, RooAbsData& adata,
                                       const RooArgSet&, RooAbsTestStatistic::Configuration const&) override {
@@ -81,3 +83,5 @@ protected:
 
 
 #endif
+
+/// \endcond

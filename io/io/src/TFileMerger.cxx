@@ -948,9 +948,9 @@ Bool_t TFileMerger::PartialMerge(Int_t in_type)
       }
    }
 
-   // Special treament for the single file case to improve efficiency...
+   // Special treatment for the single file case to improve efficiency...
    if ((fFileList.GetEntries() == 1) && !fExcessFiles.GetEntries() &&
-      !(in_type & (kIncremental | kOnlyListed | kSkipListed | kResetable | kNonResetable)) && !fCompressionChange && !fExplicitCompLevel) {
+      !(in_type & (kIncremental | kOnlyListed | kSkipListed | kResetable | kNonResetable)) && !fCompressionChange && !fExplicitCompLevel && !fNoTrees) {
       fOutputFile->Close();
       SafeDelete(fOutputFile);
 
@@ -978,6 +978,7 @@ Bool_t TFileMerger::PartialMerge(Int_t in_type)
    }
 
    fOutputFile->SetBit(kMustCleanup);
+   fOutputFile->SetBit(TFile::kCancelTTreeChangeRequest);
 
    TDirectory::TContext ctxt;
 
@@ -1039,6 +1040,7 @@ Bool_t TFileMerger::PartialMerge(Int_t in_type)
       Clear();
    } else {
       fOutputFile->ResetBit(kMustCleanup);
+      fOutputFile->ResetBit(TFile::kCancelTTreeChangeRequest);
       SafeDelete(fOutputFile);
    }
    return result;

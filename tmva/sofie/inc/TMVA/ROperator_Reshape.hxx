@@ -50,6 +50,12 @@ public:
    {
       if (opMode == Reshape) fAllowZero = attr_value;
       if (opMode == Flatten) fAxis = attr_value;
+
+      fInputTensorNames = { fNData };
+      if(!fNShape.empty()){
+         fInputTensorNames.emplace_back(fNShape);
+      }
+      fOutputTensorNames = { fNOutput };
    }
 
    // for squeeze/unsqueezed operators following old ONNX version (< 10)
@@ -62,13 +68,13 @@ public:
    }
 
    // output type is same as input
-   std::vector<ETensorType> TypeInference(std::vector<ETensorType> input){
+   std::vector<ETensorType> TypeInference(std::vector<ETensorType> input) override {
       auto ret = std::vector<ETensorType>(1, input[0]);
       return ret;
    }
 
    // output shape
-   std::vector<std::vector<size_t>> ShapeInference(std::vector<std::vector<size_t>> input){
+   std::vector<std::vector<size_t>> ShapeInference(std::vector<std::vector<size_t>> input) override {
       std::vector<std::vector<size_t>> ret;
       auto & input_shape = input[0];
 
@@ -79,7 +85,7 @@ public:
          size_t output_length = ConvertShapeToLength(output_shape);
          // (input_length == output_length) is the easy case : (2,3,4) -> (2,12)
          if (input_length != output_length) {
-            if ((output_length == 0 && fAllowZero == 0) || output_length > INT64_MAX) {
+            if ((output_length == 0 && fAllowZero == 0) || static_cast<long>(output_length)  < 0) {
                // in this case value 0 or -1 in shape are automatically corrected
                bool replacementDone = false;
                for (size_t i = 0; i < output_shape.size(); i++) {
@@ -160,8 +166,8 @@ public:
       return ret;
    }
 
-   void Initialize(RModel &model)
-   {
+   void Initialize(RModel& model) override {
+
       fVerbose = model.Verbose();
       if (model.CheckIfTensorAlreadyExist(fNData) == false) {
           // input must be a graph input, or already initialized intermediate tensor
@@ -214,8 +220,7 @@ public:
       }
    }
 
-   std::string Generate(std::string OpName)
-   {
+   std::string Generate(std::string OpName) override {
       if (fIsOutputConstant) return "";  //no op for constant tensors
 
       OpName = "op_" + OpName;

@@ -20,8 +20,9 @@ ROOT_ADD_GTEST(dataframe_utils dataframe_utils.cxx LIBRARIES ROOTDataFrame)
 ROOT_ADD_GTEST(dataframe_report dataframe_report.cxx LIBRARIES ROOTDataFrame)
 ROOT_ADD_GTEST(dataframe_incomplete_entries dataframe_incomplete_entries.cxx LIBRARIES ROOTDataFrame)
 
-
 if(MSVC)
+  set_source_files_properties(dataframe_cloning.cxx PROPERTIES COMPILE_FLAGS /bigobj)
+  set_source_files_properties(dataframe_interface.cxx PROPERTIES COMPILE_FLAGS /bigobj)
   set_property(TARGET dataframe_cache APPEND_STRING PROPERTY LINK_FLAGS " -STACK:10000000")
   set_property(TARGET dataframe_interface APPEND_STRING PROPERTY LINK_FLAGS " -STACK:10000000")
 endif()
@@ -47,7 +48,14 @@ if(MSVC)
 endif()
 
 if(NOT (MSVC OR (APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES arm64)) OR win_broken_tests OR M1_BROKEN_TESTS)
-  ROOT_ADD_GTEST(dataframe_snapshot dataframe_snapshot.cxx LIBRARIES ROOTDataFrame)
+  ROOT_ADD_GTEST(dataframe_snapshot dataframe_snapshot.cxx LIBRARIES ROOTDataFrame GenVector)
+endif()
+
+if(NOT MSVC OR win_broken_tests)
+ROOT_ADD_GTEST(dataframe_snapshot_emptyoutput dataframe_snapshot_emptyoutput.cxx LIBRARIES ROOTDataFrame GenVector)
+ROOT_GENERATE_DICTIONARY(DummyDict ${CMAKE_CURRENT_SOURCE_DIR}/DummyHeader.hxx
+                         MODULE dataframe_snapshot_emptyoutput LINKDEF DummyHeaderLinkDef.hxx OPTIONS -inlineInputHeader
+                         DEPENDENCIES ROOTVecOps GenVector)
 endif()
 
 ROOT_ADD_GTEST(dataframe_datasetspec dataframe_datasetspec.cxx LIBRARIES ROOTDataFrame)
@@ -67,6 +75,9 @@ ROOT_ADD_GTEST(dataframe_merge_results dataframe_merge_results.cxx LIBRARIES ROO
 ROOT_ADD_GTEST(dataframe_samplecallback dataframe_samplecallback.cxx CounterHelper.h LIBRARIES ROOTDataFrame)
 ROOT_ADD_GTEST(dataframe_vary dataframe_vary.cxx LIBRARIES ROOTDataFrame)
 ROOT_ADD_GTEST(dataframe_compgraph dataframe_compgraph.cxx LIBRARIES ROOTDataFrame)
+if(MSVC)
+  set_source_files_properties(dataframe_vary.cxx COMPILE_FLAGS /bigobj)
+endif()
 
 #### TESTS FOR DIFFERENT DATASOURCES ####
 if(MSVC AND MSVC_VERSION GREATER_EQUAL 1925 AND MSVC_VERSION LESS 1929 OR CMAKE_CXX_STANDARD LESS 17)
@@ -84,13 +95,18 @@ configure_file(RCsvDS_test_noheaders.csv . COPYONLY)
 configure_file(RCsvDS_test_empty.csv . COPYONLY)
 configure_file(RCsvDS_test_win.csv . COPYONLY)
 configure_file(RCsvDS_test_NaNs.csv . COPYONLY)
+configure_file(RCsvDS_test_parsing.csv . COPYONLY)
 configure_file(spec.json . COPYONLY)
 configure_file(pyspec.json . COPYONLY)
 configure_file(spec_ordering_samples_withFriends.json . COPYONLY)
 ROOT_ADD_GTEST(datasource_csv datasource_csv.cxx LIBRARIES ROOTDataFrame)
-if(MSVC AND CMAKE_SIZEOF_VOID_P EQUAL 8)
-  set_source_files_properties(dataframe_vary.cxx COMPILE_FLAGS "-bigobj")
-endif()
+
+ROOT_ADD_GTEST(datasource_tree datasource_tree.cxx LIBRARIES RIO Tree ROOTDataFrame)
+ROOT_GENERATE_DICTIONARY(ClassWithNestedSameNameDict
+                         ${CMAKE_CURRENT_SOURCE_DIR}/ClassWithNestedSameName.hxx
+                         MODULE datasource_tree
+                         LINKDEF ClassWithNestedSameNameLinkDef.hxx
+                         OPTIONS -inlineInputHeader)
 
 #### TESTS REQUIRING EXTRA ROOT FEATURES ####
 if (imt)
@@ -104,6 +120,13 @@ endif()
 
 if(root7)
   ROOT_ADD_GTEST(datasource_ntuple datasource_ntuple.cxx LIBRARIES ROOTDataFrame)
+  if(MSVC)
+    set_source_files_properties(datasource_ntuple.cxx PROPERTIES COMPILE_FLAGS /bigobj)
+  endif()
+
+  if(NOT MSVC OR win_broken_tests)
+    ROOT_ADD_GTEST(dataframe_snapshot_ntuple dataframe_snapshot_ntuple.cxx LIBRARIES ROOTDataFrame ROOTNTupleUtil)
+  endif()
 
   ROOT_STANDARD_LIBRARY_PACKAGE(NTupleStruct
                                 NO_INSTALL_HEADERS
@@ -138,6 +161,7 @@ if(pyroot)
     ROOT_ADD_PYUNITTEST(dataframe_histograms dataframe_histograms.py)
     ROOT_ADD_PYUNITTEST(dataframe_cache dataframe_cache.py ENVIRONMENT LEGACY_PYROOT="off")
     ROOT_ADD_PYUNITTEST(dataframe_datasetspec dataframe_datasetspec.py ENVIRONMENT LEGACY_PYROOT="off")
+    ROOT_ADD_PYUNITTEST(datasource_py_csv datasource_csv.py)
   endif()
   if(NOT MSVC OR win_broken_tests)
     ROOT_ADD_PYUNITTEST(dataframe_merge_results dataframe_merge_results.py)

@@ -54,6 +54,7 @@
 #include "cling/Interpreter/Transaction.h"
 #include "cling/Interpreter/Interpreter.h"
 #include "cling/Utils/AST.h"
+#include "cling/Interpreter/InterpreterAccessRAII.h"
 
 #include "llvm/Support/Path.h"
 #include "llvm/Support/FileSystem.h"
@@ -569,6 +570,9 @@ void TClingLookupHelper::GetPartiallyDesugaredName(std::string &nameLong)
 bool TClingLookupHelper::IsAlreadyPartiallyDesugaredName(const std::string &nondef,
                                                          const std::string &nameLong)
 {
+   // We are going to use and possibly update the interpreter information.
+   cling::InterpreterAccessRAII LockAccess(*fInterpreter);
+
    const cling::LookupHelper& lh = fInterpreter->getLookupHelper();
    clang::QualType t = lh.findType(nondef.c_str(), ToLHDS(WantDiags()));
    if (!t.isNull()) {
@@ -584,6 +588,9 @@ bool TClingLookupHelper::IsAlreadyPartiallyDesugaredName(const std::string &nond
 
 bool TClingLookupHelper::IsDeclaredScope(const std::string &base, bool &isInlined)
 {
+   // We are going to use and possibly update the interpreter information.
+   cling::InterpreterAccessRAII LockAccess(*fInterpreter);
+
    const cling::LookupHelper& lh = fInterpreter->getLookupHelper();
    const clang::Decl *scope = lh.findScope(base.c_str(), ToLHDS(WantDiags()), nullptr);
 
@@ -617,6 +624,9 @@ bool TClingLookupHelper::GetPartiallyDesugaredNameWithScopeHandling(const std::s
    }
 
    if (fAutoParse) fAutoParse(tname.c_str());
+
+   // We are going to use and possibly update the interpreter information.
+   cling::InterpreterAccessRAII LockAccess(*fInterpreter);
 
    // Since we already check via other means (TClassTable which is populated by
    // the dictonary loading, and the gROOT list of classes and enums, which are
@@ -1822,8 +1832,8 @@ void ROOT::TMetaUtils::WriteClassInit(std::ostream& finalString,
    if( rulesIt1 != ROOT::gReadRules.end() ) {
       int i = 0;
       finalString << "\n   // Schema evolution read functions\n";
-      std::list<ROOT::SchemaRuleMap_t>::iterator rIt = rulesIt1->second.begin();
-      while( rIt != rulesIt1->second.end() ) {
+      std::list<ROOT::SchemaRuleMap_t>::iterator rIt = rulesIt1->second.fRules.begin();
+      while (rIt != rulesIt1->second.fRules.end()) {
 
          //--------------------------------------------------------------------
          // Check if the rules refer to valid data members
@@ -1832,7 +1842,7 @@ void ROOT::TMetaUtils::WriteClassInit(std::ostream& finalString,
          std::string error_string;
          if( !HasValidDataMembers( *rIt, nameTypeMap, error_string ) ) {
             Warning(nullptr, "%s", error_string.c_str());
-            rIt = rulesIt1->second.erase(rIt);
+            rIt = rulesIt1->second.fRules.erase(rIt);
             continue;
          }
 
@@ -1857,8 +1867,8 @@ void ROOT::TMetaUtils::WriteClassInit(std::ostream& finalString,
    if( rulesIt2 != ROOT::gReadRawRules.end() ) {
       int i = 0;
       finalString << "\n   // Schema evolution read raw functions\n";
-      std::list<ROOT::SchemaRuleMap_t>::iterator rIt = rulesIt2->second.begin();
-      while( rIt != rulesIt2->second.end() ) {
+      std::list<ROOT::SchemaRuleMap_t>::iterator rIt = rulesIt2->second.fRules.begin();
+      while (rIt != rulesIt2->second.fRules.end()) {
 
          //--------------------------------------------------------------------
          // Check if the rules refer to valid data members
@@ -1867,7 +1877,7 @@ void ROOT::TMetaUtils::WriteClassInit(std::ostream& finalString,
          std::string error_string;
          if( !HasValidDataMembers( *rIt, nameTypeMap, error_string ) ) {
             Warning(nullptr, "%s", error_string.c_str());
-            rIt = rulesIt2->second.erase(rIt);
+            rIt = rulesIt2->second.fRules.erase(rIt);
             continue;
          }
 
@@ -2052,14 +2062,16 @@ void ROOT::TMetaUtils::WriteClassInit(std::ostream& finalString,
 
    if( rulesIt1 != ROOT::gReadRules.end() ) {
       finalString << "\n" << "      // the io read rules" << "\n" << "      std::vector<::ROOT::Internal::TSchemaHelper> readrules(" << rulesIt1->second.size() << ");" << "\n";
-      ROOT::WriteSchemaList( rulesIt1->second, "readrules", finalString );
+      ROOT::WriteSchemaList(rulesIt1->second.fRules, "readrules", finalString);
       finalString << "      instance.SetReadRules( readrules );" << "\n";
+      rulesIt1->second.fGenerated = true;
    }
 
    if( rulesIt2 != ROOT::gReadRawRules.end() ) {
       finalString << "\n" << "      // the io read raw rules" << "\n" << "      std::vector<::ROOT::Internal::TSchemaHelper> readrawrules(" << rulesIt2->second.size() << ");" << "\n";
-      ROOT::WriteSchemaList( rulesIt2->second, "readrawrules", finalString );
+      ROOT::WriteSchemaList(rulesIt2->second.fRules, "readrawrules", finalString);
       finalString << "      instance.SetReadRawRules( readrawrules );" << "\n";
+      rulesIt2->second.fGenerated = true;
    }
 
    finalString << "      return &instance;" << "\n" << "   }" << "\n";
@@ -2187,6 +2199,118 @@ void ROOT::TMetaUtils::WriteClassInit(std::ostream& finalString,
    } // End of !ClassInfo__HasMethod(decl,"Dictionary") || IsTemplate(*decl))
 
    finalString << "} // end of namespace ROOT" << "\n" << "\n";
+}
+
+void ROOT::TMetaUtils::WriteStandaloneReadRules(std::ostream &finalString, bool rawrules,
+                                                std::vector<std::string> &standaloneTargets,
+                                                const cling::Interpreter &interp)
+{
+   for (auto &rulesIt1 : rawrules ? ROOT::gReadRawRules : ROOT::gReadRules) {
+      if (!rulesIt1.second.fGenerated) {
+         const clang::Type *typeptr = nullptr;
+         const clang::CXXRecordDecl *target =
+            ROOT::TMetaUtils::ScopeSearch(rulesIt1.first.c_str(), interp, true /*diag*/, &typeptr);
+
+         if (!target && !rulesIt1.second.fTargetDecl) {
+            auto &&nRules = rulesIt1.second.size();
+            std::string rule{nRules > 1 ? "rules" : "rule"};
+            std::string verb{nRules > 1 ? "were" : "was"};
+            ROOT::TMetaUtils::Warning(nullptr, "%d %s for target class %s %s not used!\n", nRules, rule.c_str(),
+                                      rulesIt1.first.c_str(), verb.c_str());
+            continue;
+         }
+
+         ROOT::MembersTypeMap_t nameTypeMap;
+         CreateNameTypeMap(*target, nameTypeMap);
+
+         std::string name;
+         TClassEdit::GetNormalizedName(name, rulesIt1.first);
+
+         std::string mappedname;
+         ROOT::TMetaUtils::GetCppName(mappedname, name.c_str());
+
+         finalString << "namespace ROOT {" << "\n";
+         // Also TClingUtils.cxx:1823
+         int i = 0;
+         finalString << "\n   // Schema evolution read functions\n";
+         std::list<ROOT::SchemaRuleMap_t>::iterator rIt = rulesIt1.second.fRules.begin();
+         while (rIt != rulesIt1.second.fRules.end()) {
+
+            //--------------------------------------------------------------------
+            // Check if the rules refer to valid data members
+            ///////////////////////////////////////////////////////////////////////
+
+            std::string error_string;
+            if (!HasValidDataMembers(*rIt, nameTypeMap, error_string)) {
+               ROOT::TMetaUtils::Warning(nullptr, "%s", error_string.c_str());
+               rIt = rulesIt1.second.fRules.erase(rIt);
+               continue;
+            }
+
+            //---------------------------------------------------------------------
+            // Write the conversion function if necessary
+            ///////////////////////////////////////////////////////////////////////
+
+            if (rIt->find("code") != rIt->end()) {
+               if (rawrules)
+                  WriteReadRawRuleFunc(*rIt, i++, mappedname, nameTypeMap, finalString);
+               else
+                  WriteReadRuleFunc(*rIt, i++, mappedname, nameTypeMap, finalString);
+            }
+            ++rIt;
+         }
+         finalString << "} // namespace ROOT" << "\n";
+
+         standaloneTargets.push_back(rulesIt1.first);
+         rulesIt1.second.fGenerated = true;
+      }
+   }
+}
+
+void ROOT::TMetaUtils::WriteRulesRegistration(std::ostream &finalString, const std::string &dictName,
+                                              const std::vector<std::string> &standaloneTargets)
+{
+   std::string functionname("RecordReadRules_");
+   functionname += dictName;
+
+   finalString << "namespace ROOT {" << "\n";
+   finalString << "   // Registration Schema evolution read functions\n";
+   finalString << "   int " << functionname << "() {" << "\n";
+   if (!standaloneTargets.empty())
+      finalString << "\n"
+                  << "      ::ROOT::Internal::TSchemaHelper* rule;" << "\n";
+   for (const auto &target : standaloneTargets) {
+      std::string name;
+      TClassEdit::GetNormalizedName(name, target);
+
+      ROOT::SchemaRuleClassMap_t::iterator rulesIt1 = ROOT::gReadRules.find(target.c_str());
+      finalString << "    {\n";
+      if (rulesIt1 != ROOT::gReadRules.end()) {
+         finalString << "      // the io read rules for " << target << "\n";
+         finalString << "      std::vector<::ROOT::Internal::TSchemaHelper> readrules(" << rulesIt1->second.size()
+                     << ");" << "\n";
+         ROOT::WriteSchemaList(rulesIt1->second.fRules, "readrules", finalString);
+         finalString << "      TClass::RegisterReadRules(TSchemaRule::kReadRule, \"" << name
+                     << "\", std::move(readrules));\n";
+         rulesIt1->second.fGenerated = true;
+      }
+      ROOT::SchemaRuleClassMap_t::iterator rulesIt2 = ROOT::gReadRawRules.find(target.c_str());
+      if (rulesIt2 != ROOT::gReadRawRules.end()) {
+         finalString << "\n      // the io read raw rules for " << target << "\n";
+         finalString << "      std::vector<::ROOT::Internal::TSchemaHelper> readrawrules(" << rulesIt2->second.size()
+                     << ");" << "\n";
+         ROOT::WriteSchemaList(rulesIt2->second.fRules, "readrawrules", finalString);
+         finalString << "      TClass::RegisterReadRules(TSchemaRule::kReadRawRule, \"" << name
+                     << "\", std::move(readrawrules));\n";
+         rulesIt2->second.fGenerated = true;
+      }
+      finalString << "    }\n";
+   }
+   finalString << "      return 0;\n";
+   finalString << "   }\n";
+   finalString << "   static int _R__UNIQUE_DICT_(ReadRules_" << dictName << ") = " << functionname << "();";
+   finalString << "R__UseDummy(_R__UNIQUE_DICT_(ReadRules_" << dictName << "));" << "\n";
+   finalString << "} // namespace ROOT" << "\n";
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2672,18 +2796,6 @@ void ROOT::TMetaUtils::foreachHeaderInModule(const clang::Module &module,
 {
    // Iterates over all headers in a module and calls the closure on each.
 
-   // FIXME: We currently have to hardcode '4' to do this. Maybe we
-   // will have a nicer way to do this in the future.
-   // NOTE: This is on purpose '4', not '5' which is the size of the
-   // vector. The last element is the list of excluded headers which we
-   // obviously don't want to check here.
-   const std::size_t publicHeaderIndex = 4;
-
-   // Integrity check in case this array changes its size at some point.
-   const std::size_t maxArrayLength = ((sizeof module.Headers) / (sizeof *module.Headers));
-   static_assert(publicHeaderIndex + 1 == maxArrayLength,
-                 "'Headers' has changed it's size, we need to update publicHeaderIndex");
-
    // Make a list of modules and submodules that we can check for headers.
    // We use a SetVector to prevent an infinite loop in unlikely case the
    // modules somehow are messed up and don't form a tree...
@@ -2702,8 +2814,10 @@ void ROOT::TMetaUtils::foreachHeaderInModule(const clang::Module &module,
          }
       }
 
-      for (std::size_t i = 0; i < publicHeaderIndex; i++) {
-         auto &headerList = m->Headers[i];
+      // We want to check for all headers except the list of excluded headers here.
+      for (auto HK : {clang::Module::HK_Normal, clang::Module::HK_Textual, clang::Module::HK_Private,
+                      clang::Module::HK_PrivateTextual}) {
+         auto &headerList = m->Headers[HK];
          for (const clang::Module::Header &moduleHeader : headerList) {
             closure(moduleHeader);
          }
@@ -3378,7 +3492,7 @@ std::string ROOT::TMetaUtils::GetFileName(const clang::Decl& decl,
       = getFinalSpellingLoc(sourceManager,
                             sourceManager.getIncludeLoc(headerFID));
 
-   const FileEntry *headerFE = sourceManager.getFileEntryForID(headerFID);
+   OptionalFileEntryRef headerFE = sourceManager.getFileEntryRefForID(headerFID);
    while (includeLoc.isValid() && sourceManager.isInSystemHeader(includeLoc)) {
       ConstSearchDirIterator *foundDir = nullptr;
       // use HeaderSearch on the basename, to make sure it takes a header from
@@ -3397,7 +3511,7 @@ std::string ROOT::TMetaUtils::GetFileName(const clang::Decl& decl,
                                 false /*OpenFile*/, true /*CacheFailures*/);
       if (FEhdr) break;
       headerFID = sourceManager.getFileID(includeLoc);
-      headerFE = sourceManager.getFileEntryForID(headerFID);
+      headerFE = sourceManager.getFileEntryRefForID(headerFID);
       // If we have a system header in a module we can't just trace back the
       // original include with the preprocessor. But it should be enough if
       // we trace it back to the top-level system header that includes this
@@ -3405,7 +3519,7 @@ std::string ROOT::TMetaUtils::GetFileName(const clang::Decl& decl,
       if (interp.getCI()->getLangOpts().Modules && !headerFE) {
          assert(decl.isFirstDecl() && "Couldn't trace back include from a decl"
                                       " that is not from an AST file");
-         assert(StringRef(includeLoc.printToString(sourceManager)).startswith("<module-includes>"));
+         assert(StringRef(includeLoc.printToString(sourceManager)).starts_with("<module-includes>"));
          break;
       }
       includeLoc = getFinalSpellingLoc(sourceManager,
@@ -4070,10 +4184,18 @@ void ROOT::TMetaUtils::GetNormalizedName(std::string &norm_name, const clang::Qu
    cling::Interpreter::PushTransactionRAII clingRAII(const_cast<cling::Interpreter*>(&interpreter));
    normalizedType.getAsStringInternal(normalizedNameStep1,policy);
 
+   // Remove the _Atomic type specifyier if present before normalising
+   TClassEdit::AtomicTypeNameHandlerRAII atomicTypeNameHandler_step1(
+      normalizedNameStep1, TClassEdit::AtomicTypeNameHandlerRAII::EBehavior::kDetectStrip);
+
    // Still remove the std:: and default template argument for STL container and
    // normalize the location and amount of white spaces.
    TClassEdit::TSplitType splitname(normalizedNameStep1.c_str(),(TClassEdit::EModType)(TClassEdit::kLong64 | TClassEdit::kDropStd | TClassEdit::kDropStlDefault | TClassEdit::kKeepOuterConst));
    splitname.ShortType(norm_name,TClassEdit::kDropStd | TClassEdit::kDropStlDefault );
+
+   TClassEdit::AtomicTypeNameHandlerRAII atomicTypeNameHandler_norm_name(
+      norm_name, atomicTypeNameHandler_step1.IsAtomic() ? TClassEdit::AtomicTypeNameHandlerRAII::EBehavior::kReadd
+                                                        : TClassEdit::AtomicTypeNameHandlerRAII::EBehavior::kNoOp);
 
    // The result of this routine is by definition a fully qualified name.  There is an implicit starting '::' at the beginning of the name.
    // Depending on how the user typed their code, in particular typedef declarations, we may end up with an explicit '::' being
@@ -4919,7 +5041,10 @@ ROOT::ESTLType ROOT::TMetaUtils::STLKind(const llvm::StringRef type)
        ROOT::kNotSTL
       };
    //              kind of stl container
-   for(int k=1;stls[k];k++) {if (type.equals(stls[k])) return values[k];}
+   for (int k = 1; stls[k]; k++) {
+      if (type == stls[k])
+         return values[k];
+   }
    return ROOT::kNotSTL;
 }
 

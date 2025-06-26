@@ -9,13 +9,7 @@
 ################################################################################
 
 r"""
-/**
-\class TDirectory
-\brief \parblock \endparblock
-\htmlonly
-<div class="pyrootbox">
-\endhtmlonly
-## PyROOT
+\pythondoc TDirectory
 
 It is possible to retrieve the content of a TDirectory object
 just like getting items from a Python dictionary.
@@ -44,10 +38,8 @@ on TDirectory::WriteObjectAny. This method is a no-op for TDirectory objects,
 but it is useful for objects of TDirectory subclasses such as TDirectoryFile
 and TFile, which inherit it. Please refer to the documentation of those classes
 for more information.
-\htmlonly
-</div>
-\endhtmlonly
-*/
+
+\endpythondoc
 """
 
 import cppyy
@@ -61,7 +53,7 @@ def _TDirectory_getitem(self, key):
     - Raising an AttributeError if the object does not exist
     - Caching the result of a successful get for future re-attempts.
     Once cached, the same object is retrieved every time.
-    This pythonisation is inherited by TDirectoryFile and TFile.
+    This pythonization is inherited by TDirectoryFile and TFile.
 
     Example:
     ```

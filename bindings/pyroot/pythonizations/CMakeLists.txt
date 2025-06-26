@@ -14,7 +14,9 @@ if(dataframe)
         ROOT/_pythonization/_rdataframe.py
         ROOT/_pythonization/_rdfdescription.py
         ROOT/_pythonization/_rdf_conversion_maps.py
-        ROOT/_pythonization/_rdf_pyz.py)
+        ROOT/_pythonization/_rdf_pyz.py
+        ROOT/_pythonization/_rdisplay.py
+        ROOT/_pythonization/_rdf_namespace.py)
 endif()
 
 if(roofit)
@@ -86,6 +88,7 @@ set(py_sources
   ROOT/_pythonization/_generic.py
   ROOT/_pythonization/_memory_utils.py
   ROOT/_pythonization/_pyz_utils.py
+  ROOT/_pythonization/_rntuple.py
   ROOT/_pythonization/_runtime_error.py
   ROOT/_pythonization/_rvec.py
   ROOT/_pythonization/_stl_vector.py
@@ -112,15 +115,18 @@ set(py_sources
   ROOT/_pythonization/_th1.py
   ROOT/_pythonization/_th2.py
   ROOT/_pythonization/_th3.py
+  ROOT/_pythonization/_thistpainter.py
   ROOT/_pythonization/_titer.py
   ROOT/_pythonization/_tobject.py
   ROOT/_pythonization/_tobjstring.py
+  ROOT/_pythonization/_tscatter.py
   ROOT/_pythonization/_tseqcollection.py
   ROOT/_pythonization/_tstring.py
   ROOT/_pythonization/_tstyle.py
   ROOT/_pythonization/_ttree.py
   ROOT/_pythonization/_tvector3.py
   ROOT/_pythonization/_tvectort.py
+  ROOT/_pythonization/_uhi.py
   ${PYROOT_EXTRA_PYTHON_SOURCES}
 )
 

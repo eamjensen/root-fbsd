@@ -37,7 +37,7 @@ ROOT.RooMCStudy(model, ROOT.RooArgSet(x), FitOptions=dict(Save=True, PrintEvalEr
 */
 """
 
-from ._utils import _kwargs_to_roocmdargs, _dict_to_flat_map, cpp_signature
+from ._utils import _dict_to_flat_map, _kwargs_to_roocmdargs, cpp_signature
 
 
 @cpp_signature(
@@ -194,15 +194,7 @@ def Link(*args, **kwargs):
 
 @cpp_signature("RooFit::DataError(Int_t) ;")
 def DataError(etype):
-    r"""Instead of passing an enum value to this function, you can pass a
-    string with the name of that enum value, for example:
-
-    ~~~ {.py}
-        data.plotOn(frame, DataError="SumW2")
-        # instead of DataError=ROOT.RooAbsData.SumW2
-    ~~~
-
-    If you want to use the `"None"` enum value to disable error plotting, you
+    r"""If you want to use the `"None"` enum value to disable error plotting, you
     can also pass `None` directly instead of passing a string:
 
     ~~~ {.py}
@@ -210,27 +202,12 @@ def DataError(etype):
         # instead of DataError="None"
     ~~~
     """
-    # Redefinition of `DataError` to also accept `str` or `NoneType` to get the
-    # corresponding enum values from RooAbsData.DataError.
     from cppyy.gbl import RooFit
 
     # One of the possible enum values is "None", and we want the user to be
     # able to pass None also as a NoneType for convenience.
     if etype is None:
         etype = "None"
-
-    if isinstance(etype, str):
-        try:
-            import ROOT
-
-            etype = getattr(ROOT.RooAbsData.ErrorType, etype)
-        except AttributeError as error:
-            raise ValueError(
-                "Unsupported error type type passed to DataError()."
-                + ' Supported decay types are : "Poisson", "SumW2", "Auto", "Expected", and None.'
-            )
-        except Exception as exception:
-            raise exception
 
     return RooFit._DataError(etype)
 
@@ -252,7 +229,6 @@ def _bindFunctionOrPdf(name, func, is_rooabspdf, *variables):
     """
 
     import ROOT
-    import numpy as np
 
     # use the C++ version if dealing with C++ function
     if "cppyy" in repr(type(func)):
@@ -268,10 +244,13 @@ def _bindFunctionOrPdf(name, func, is_rooabspdf, *variables):
             super(RooPyBindDerived, self).__init__(name, title, ROOT.RooArgList(*variables))
 
         def evaluate(self):
+            import numpy as np
+
             inputs = [np.array([v.getVal()]) for v in self.varlist()]
             return func(*inputs)[0]
 
         def doEvalPy(self, ctx):
+            import numpy as np
 
             def span_to_numpy(sp):
                 return np.frombuffer(sp.data(), dtype=np.float64, count=sp.size())

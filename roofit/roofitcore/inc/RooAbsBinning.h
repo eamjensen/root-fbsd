@@ -25,8 +25,8 @@ class RooAbsRealLValue ;
 class RooAbsArg ;
 class RooAbsReal ;
 namespace RooFit {
-namespace Detail {
-class CodeSquashContext;
+namespace Experimental {
+class CodegenContext;
 }
 }
 
@@ -71,7 +71,7 @@ public:
     return out;
   }
 
-  virtual std::string translateBinNumber(RooFit::Detail::CodeSquashContext &ctx, RooAbsArg const &var, int coef) const;
+  virtual std::string translateBinNumber(RooFit::Experimental::CodegenContext &ctx, RooAbsArg const &var, int coef) const;
 
   virtual double binCenter(Int_t bin) const = 0 ;
   virtual double binWidth(Int_t bin) const = 0 ;

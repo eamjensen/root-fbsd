@@ -13,8 +13,8 @@
 #include "CustomStructUtil.hxx"
 #include "ntupleutil_test.hxx"
 
+using ROOT::RNTupleReader;
 using ROOT::Experimental::RNTupleImporter;
-using ROOT::Experimental::RNTupleReader;
 
 TEST(RNTupleImporter, Empty)
 {
@@ -27,12 +27,12 @@ TEST(RNTupleImporter, Empty)
 
    auto importer = RNTupleImporter::Create(fileGuard.GetPath(), "tree", fileGuard.GetPath());
    importer->SetIsQuiet(true);
-   EXPECT_THROW(importer->Import(), ROOT::Experimental::RException);
+   EXPECT_THROW(importer->Import(), ROOT::RException);
    importer->SetNTupleName("ntuple");
    importer->Import();
    auto reader = RNTupleReader::Open("ntuple", fileGuard.GetPath());
    EXPECT_EQ(0U, reader->GetNEntries());
-   EXPECT_THROW(importer->Import(), ROOT::Experimental::RException);
+   EXPECT_THROW(importer->Import(), ROOT::RException);
 }
 
 TEST(RNTupleImporter, CreateFromTree)
@@ -49,12 +49,12 @@ TEST(RNTupleImporter, CreateFromTree)
 
    auto importer = RNTupleImporter::Create(tree, fileGuard.GetPath());
    importer->SetIsQuiet(true);
-   EXPECT_THROW(importer->Import(), ROOT::Experimental::RException);
+   EXPECT_THROW(importer->Import(), ROOT::RException);
    importer->SetNTupleName("ntuple");
    importer->Import();
    auto reader = RNTupleReader::Open("ntuple", fileGuard.GetPath());
    EXPECT_EQ(0U, reader->GetNEntries());
-   EXPECT_THROW(importer->Import(), ROOT::Experimental::RException);
+   EXPECT_THROW(importer->Import(), ROOT::RException);
 }
 
 TEST(RNTupleImporter, CreateFromChain)
@@ -91,7 +91,7 @@ TEST(RNTupleImporter, CreateFromChain)
 
    auto importer1 = RNTupleImporter::Create(namedChain, chainFileGuard.GetPath());
    importer1->SetIsQuiet(true);
-   EXPECT_THROW(importer1->Import(), ROOT::Experimental::RException);
+   EXPECT_THROW(importer1->Import(), ROOT::RException);
    importer1->SetNTupleName("ntuple");
    importer1->Import();
 
@@ -102,7 +102,7 @@ TEST(RNTupleImporter, CreateFromChain)
    EXPECT_EQ(42, viewA(0));
    EXPECT_EQ(43, viewA(1));
 
-   EXPECT_THROW(importer1->Import(), ROOT::Experimental::RException);
+   EXPECT_THROW(importer1->Import(), ROOT::RException);
 
    TChain unnamedChain;
    unnamedChain.Add((treeFileGuard.GetPath() + "?#tree1").c_str());
@@ -215,7 +215,7 @@ TEST(RNTupleImporter, ConvertDotsInBranchNames)
    importer->SetIsQuiet(true);
    importer->SetNTupleName("ntuple");
 
-   EXPECT_THROW(importer->Import(), ROOT::Experimental::RException);
+   EXPECT_THROW(importer->Import(), ROOT::RException);
 
    importer->SetConvertDotsInBranchNames(true);
    importer->Import();
@@ -231,8 +231,8 @@ TEST(RNTupleImporter, ConvertDotsInBranchNames)
 
 TEST(RNTupleImporter, FieldModifier)
 {
-   using ROOT::Experimental::EColumnType;
-   using ROOT::Experimental::RFieldBase;
+   using ROOT::ENTupleColumnType;
+   using ROOT::RFieldBase;
 
    FileRaii fileGuard("test_ntuple_importer_column_modifier.root");
    {
@@ -248,7 +248,7 @@ TEST(RNTupleImporter, FieldModifier)
 
    auto fnLowPrecisionFloatModifier = [](RFieldBase &field) {
       if (field.GetFieldName() == "a")
-         field.SetColumnRepresentatives({{EColumnType::kReal16}});
+         field.SetColumnRepresentatives({{ENTupleColumnType::kReal16}});
    };
 
    auto importer = RNTupleImporter::Create(fileGuard.GetPath(), "tree", fileGuard.GetPath());
@@ -262,9 +262,9 @@ TEST(RNTupleImporter, FieldModifier)
    EXPECT_FLOAT_EQ(1.0, *reader->GetModel().GetDefaultEntry().GetPtr<float>("a"));
    EXPECT_FLOAT_EQ(2.0, *reader->GetModel().GetDefaultEntry().GetPtr<float>("b"));
 
-   EXPECT_EQ(RFieldBase::ColumnRepresentation_t{EColumnType::kReal16},
+   EXPECT_EQ(RFieldBase::ColumnRepresentation_t{ENTupleColumnType::kReal16},
              reader->GetModel().GetConstField("a").GetColumnRepresentatives()[0]);
-   EXPECT_EQ(RFieldBase::ColumnRepresentation_t{EColumnType::kSplitReal32},
+   EXPECT_EQ(RFieldBase::ColumnRepresentation_t{ENTupleColumnType::kSplitReal32},
              reader->GetModel().GetConstField("b").GetColumnRepresentatives()[0]);
 }
 

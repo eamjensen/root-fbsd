@@ -17,9 +17,9 @@
 #ifndef ROOT_RNTupleDS
 #define ROOT_RNTupleDS
 
-#include <ROOT/RDataFrame.hxx>
 #include <ROOT/RDataSource.hxx>
 #include <ROOT/RNTupleUtil.hxx>
+#include <ROOT/RNTupleDescriptor.hxx>
 #include <string_view>
 
 #include <condition_variable>
@@ -32,32 +32,33 @@
 #include <unordered_map>
 
 namespace ROOT {
-class RNTuple;
-
-namespace Experimental {
 class RFieldBase;
-class RNTupleDescriptor;
-
-namespace Internal {
+class RDataFrame;
+class RNTuple;
+} // namespace ROOT
+namespace ROOT::Internal::RDF {
 class RNTupleColumnReader;
+}
+namespace ROOT::Internal {
 class RPageSource;
 }
 
+namespace ROOT::RDF {
 class RNTupleDS final : public ROOT::RDF::RDataSource {
-   friend class Internal::RNTupleColumnReader;
+   friend class ROOT::Internal::RDF::RNTupleColumnReader;
 
    /// The PrepareNextRanges() method populates the fNextRanges list with REntryRangeDS records.
    /// The GetEntryRanges() swaps fNextRanges and fCurrentRanges and uses the list of
    /// REntryRangeDS records to return the list of ranges ready to use by the RDF loop manager.
    struct REntryRangeDS {
-      std::unique_ptr<ROOT::Experimental::Internal::RPageSource> fSource;
+      std::unique_ptr<ROOT::Internal::RPageSource> fSource;
       ULong64_t fFirstEntry = 0; ///< First entry index in fSource
       /// End entry index in fSource, e.g. the number of entries in the range is fLastEntry - fFirstEntry
       ULong64_t fLastEntry = 0;
    };
 
    /// A clone of the first pages source's descriptor.
-   std::unique_ptr<RNTupleDescriptor> fPrincipalDescriptor;
+   ROOT::RNTupleDescriptor fPrincipalDescriptor;
 
    /// The data source may be constructed with an ntuple name and a list of files
    std::string fNTupleName;
@@ -78,25 +79,29 @@ class RNTupleDS final : public ROOT::RDF::RDataSource {
    ///         and
    ///      c) trigger staging of the next batch of files in the I/O background thread.
    ///   4. On `Finalize()`, the I/O background thread is stopped.
-   std::vector<std::unique_ptr<ROOT::Experimental::Internal::RPageSource>> fStagingArea;
+   std::vector<std::unique_ptr<ROOT::Internal::RPageSource>> fStagingArea;
    std::size_t fNextFileIndex = 0; ///< Index into fFileNames to the next file to process
 
    /// We prepare a prototype field for every column. If a column reader is actually requested
    /// in GetColumnReaders(), we move a clone of the field into a new column reader for RDataFrame.
    /// Only the clone connects to the backing page store and acquires I/O resources.
    /// The field IDs are set in the context of the first source and used as keys in fFieldId2QualifiedName.
-   std::vector<std::unique_ptr<ROOT::Experimental::RFieldBase>> fProtoFields;
+   std::vector<std::unique_ptr<ROOT::RFieldBase>> fProtoFields;
+   /// Columns may be requested with types other than with which they were initially added as proto fields. For example,
+   /// a column with a `ROOT::RVec<float>` proto field may instead be requested as a `std::vector<float>`. In case this
+   /// happens, we create an alternative proto field and store it here, with the original index in `fProtoFields` as
+   /// key. A single column can have more than one alternative proto fields.
+   std::unordered_map<std::size_t, std::vector<std::unique_ptr<ROOT::RFieldBase>>> fAlternativeProtoFields;
    /// Connects the IDs of active proto fields and their subfields to their fully qualified name (a.b.c.d).
    /// This enables the column reader to rewire the field IDs when the file changes (chain),
    /// using the fully qualified name as a search key in the descriptor of the other page sources.
-   std::unordered_map<ROOT::Experimental::DescriptorId_t, std::string> fFieldId2QualifiedName;
+   std::unordered_map<ROOT::DescriptorId_t, std::string> fFieldId2QualifiedName;
    std::vector<std::string> fColumnNames;
    std::vector<std::string> fColumnTypes;
    /// List of column readers returned by GetColumnReaders() organized by slot. Used to reconnect readers
    /// to new page sources when the files in the chain change.
-   std::vector<std::vector<Internal::RNTupleColumnReader *>> fActiveColumnReaders;
+   std::vector<std::vector<ROOT::Internal::RDF::RNTupleColumnReader *>> fActiveColumnReaders;
 
-   unsigned int fNSlots = 0;
    ULong64_t fSeenEntries = 0;                ///< The number of entries so far returned by GetEntryRanges()
    std::vector<REntryRangeDS> fCurrentRanges; ///< Basis for the ranges returned by the last GetEntryRanges() call
    std::vector<REntryRangeDS> fNextRanges;    ///< Basis for the ranges populated by the PrepareNextRanges() call
@@ -120,23 +125,34 @@ class RNTupleDS final : public ROOT::RDF::RDataSource {
 
    /// \brief Holds useful information about fields added to the RNTupleDS
    struct RFieldInfo {
-      DescriptorId_t fFieldId;
+      ROOT::DescriptorId_t fFieldId;
       std::size_t fNRepetitions;
       // Enable `std::vector::emplace_back` for this type
-      RFieldInfo(DescriptorId_t fieldId, std::size_t nRepetitions) : fFieldId(fieldId), fNRepetitions(nRepetitions) {}
+      RFieldInfo(ROOT::DescriptorId_t fieldId, std::size_t nRepetitions)
+         : fFieldId(fieldId), fNRepetitions(nRepetitions)
+      {
+      }
    };
 
    /// Provides the RDF column "colName" given the field identified by fieldID. For records and collections,
    /// AddField recurses into the sub fields. The fieldInfos argument is a list of objects holding info
    /// about the fields of the outer collection(s) (w.r.t. fieldId). For instance, if fieldId refers to an
    /// `std::vector<Jet>`, with
+   /// ~~~{.cpp}
    /// struct Jet {
    ///    float pt;
    ///    float eta;
    /// };
-   /// AddField will recurse into Jet.pt and Jet.eta and provide the two inner fields as std::vector<float> each.
-   void AddField(const RNTupleDescriptor &desc, std::string_view colName, DescriptorId_t fieldId,
-                 std::vector<RFieldInfo> fieldInfos);
+   /// ~~~
+   /// AddField will recurse into `Jet.pt` and `Jet.eta` and provide the two inner fields as `ROOT::VecOps::RVec<float>`
+   /// each.
+   ///
+   /// In case the field is a collection of type `ROOT::VecOps::RVec`, `std::vector` or `std::array`, its corresponding
+   /// column is added as a `ROOT::VecOps::RVec`. Otherwise, the collection field's on-disk type is used. Note, however,
+   /// that inner record members of such collections will still be added as `ROOT::VecOps::RVec` (e.g., `std::set<Jet>
+   /// will be added as a `std::set`, but `Jet.[pt|eta] will be added as `ROOT::VecOps::RVec<float>).
+   void AddField(const ROOT::RNTupleDescriptor &desc, std::string_view colName, ROOT::DescriptorId_t fieldId,
+                 std::vector<RFieldInfo> fieldInfos, bool convertToRVec = true);
 
    /// The main function of the fThreadStaging background thread
    void ExecStaging();
@@ -149,13 +165,17 @@ class RNTupleDS final : public ROOT::RDF::RDataSource {
    /// is not enough work to give at least one cluster to every slot.
    void PrepareNextRanges();
 
-   explicit RNTupleDS(std::unique_ptr<ROOT::Experimental::Internal::RPageSource> pageSource);
+   explicit RNTupleDS(std::unique_ptr<ROOT::Internal::RPageSource> pageSource);
 
 public:
    RNTupleDS(std::string_view ntupleName, std::string_view fileName);
-   RNTupleDS(ROOT::RNTuple *ntuple);
    RNTupleDS(std::string_view ntupleName, const std::vector<std::string> &fileNames);
-   ~RNTupleDS();
+   // Rule of five
+   RNTupleDS(const RNTupleDS &) = delete;
+   RNTupleDS &operator=(const RNTupleDS &) = delete;
+   RNTupleDS(RNTupleDS &&) = delete;
+   RNTupleDS &operator=(RNTupleDS &&) = delete;
+   ~RNTupleDS() final;
 
    void SetNSlots(unsigned int nSlots) final;
    std::size_t GetNFiles() const final { return fFileNames.empty() ? 1 : fFileNames.size(); }
@@ -179,17 +199,11 @@ public:
 protected:
    Record_t GetColumnReadersImpl(std::string_view name, const std::type_info &) final;
 };
+} // namespace ROOT::RDF
 
-} // namespace Experimental
-
-namespace RDF {
-namespace Experimental {
+namespace ROOT::RDF {
 RDataFrame FromRNTuple(std::string_view ntupleName, std::string_view fileName);
 RDataFrame FromRNTuple(std::string_view ntupleName, const std::vector<std::string> &fileNames);
-RDataFrame FromRNTuple(ROOT::RNTuple *ntuple);
-} // namespace Experimental
-} // namespace RDF
-
-} // ns ROOT
+} // namespace ROOT::RDF
 
 #endif

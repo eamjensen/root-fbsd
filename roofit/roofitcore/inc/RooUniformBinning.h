@@ -44,7 +44,7 @@ public:
   double averageBinWidth() const override { return _binw ; }
   double* array() const override ;
 
-  std::string translateBinNumber(RooFit::Detail::CodeSquashContext &ctx, RooAbsArg const &var, int coef) const override;
+  std::string translateBinNumber(RooFit::Experimental::CodegenContext &ctx, RooAbsArg const &var, int coef) const override;
 
 protected:
    mutable std::vector<double> _array; ///<! do not persist

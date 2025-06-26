@@ -38,6 +38,7 @@
 #include <RooFormulaVar.h>
 
 #include <Math/CholeskyDecomp.h>
+#include <Math/Util.h>
 
 #include "ConstraintHelpers.h"
 #include "RooEvaluatorWrapper.h"
@@ -49,6 +50,8 @@
 #include "RooNLLVar.h"
 #include "RooXYChi2Var.h"
 #endif
+
+using RooFit::Detail::RooNLLVarNew;
 
 namespace {
 
@@ -223,7 +226,7 @@ int calcSumW2CorrectedCovariance(RooAbsReal const &pdf, RooMinimizer &minimizer,
 }
 
 /// Configuration struct for RooAbsPdf::minimizeNLL with all the default values
-/// that also should be taked as the default values for RooAbsPdf::fitTo.
+/// that also should be taken as the default values for RooAbsPdf::fitTo.
 struct MinimizerConfig {
    double recoverFromNaN = 10.;
    int optConst = 2;
@@ -347,15 +350,15 @@ std::unique_ptr<RooAbsArg> createSimultaneousNLL(RooSimultaneous const &simPdf, 
          // are extended. Therefore, we have to make sure that we don't request
          // extended NLL objects for channels that can't be extended.
          const bool isPdfExtended = isSimPdfExtended && pdf->extendMode() != RooAbsPdf::CanNotBeExtended;
-         auto nll = std::make_unique<RooFit::Detail::RooNLLVarNew>(name.c_str(), name.c_str(), *pdf, *observables,
-                                                                   isPdfExtended, offset);
+         auto nll =
+            std::make_unique<RooNLLVarNew>(name.c_str(), name.c_str(), *pdf, *observables, isPdfExtended, offset);
          // Rename the special variables
          nll->setPrefix(std::string("_") + catName + "_");
          nllTerms.addOwned(std::move(nll));
       }
    }
 
-   for (auto *nll : static_range_cast<RooFit::Detail::RooNLLVarNew *>(nllTerms)) {
+   for (auto *nll : static_range_cast<RooNLLVarNew *>(nllTerms)) {
       nll->setSimCount(nllTerms.size());
    }
 
@@ -400,8 +403,8 @@ std::unique_ptr<RooAbsReal> createNLLNew(RooAbsPdf &pdf, RooAbsData &data, std::
       simPdf->wrapPdfsInBinSamplingPdfs(data, integrateOverBinsPrecision);
       nllTerms.addOwned(createSimultaneousNLL(*simPdf, isExtended, rangeName, offset));
    } else {
-      nllTerms.addOwned(std::make_unique<RooFit::Detail::RooNLLVarNew>("RooNLLVarNew", "RooNLLVarNew", finalPdf,
-                                                                       observables, isExtended, offset));
+      nllTerms.addOwned(
+         std::make_unique<RooNLLVarNew>("RooNLLVarNew", "RooNLLVarNew", finalPdf, observables, isExtended, offset));
    }
    if (constraints) {
       nllTerms.addOwned(std::move(constraints));
@@ -589,6 +592,9 @@ std::unique_ptr<RooFitResult> minimize(RooAbsReal &pdf, RooAbsReal &nll, RooAbsD
 
 std::unique_ptr<RooAbsReal> createNLL(RooAbsPdf &pdf, RooAbsData &data, const RooLinkedList &cmdList)
 {
+   auto timingScope = std::make_unique<ROOT::Math::Util::TimingScope>(
+      [&pdf](std::string const &msg) { oocoutI(&pdf, Fitting) << msg << std::endl; }, "Creation of NLL object took");
+
    auto baseName = std::string("nll_") + pdf.GetName() + "_" + data.GetName();
 
    // Select the pdf-specific commands
@@ -778,6 +784,12 @@ std::unique_ptr<RooAbsReal> createNLL(RooAbsPdf &pdf, RooAbsData &data, const Ro
           evalBackend == RooFit::EvalBackend::Value::CodegenNoGrad) {
          bool createGradient = evalBackend == RooFit::EvalBackend::Value::Codegen;
          auto simPdf = dynamic_cast<RooSimultaneous const *>(pdfClone.get());
+
+         // We destroy the timing scrope for createNLL prematurely, because we
+         // separately measure the time for jitting and gradient creation
+         // inside the RooFuncWrapper.
+         timingScope.reset();
+
          nllWrapper = std::make_unique<RooFit::Experimental::RooFuncWrapper>("nll_func_wrapper", "nll_func_wrapper",
                                                                              *nll, &data, simPdf, createGradient);
          if (createGradient)

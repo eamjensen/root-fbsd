@@ -15,7 +15,8 @@ class TGraphTimePainter extends ObjectPainter {
 
    /** @summary Redraw object */
    redraw() {
-      if (this.step === undefined) this.startDrawing();
+      if (this.step === undefined)
+         this.startDrawing();
    }
 
    /** @summary Decode drawing options */
@@ -153,4 +154,16 @@ class TGraphTimePainter extends ObjectPainter {
 
 } // class TGraphTimePainter
 
-export { TGraphTimePainter };
+
+/** @summary Draw TRooPlot
+  * @private */
+async function drawRooPlot(dom, plot) {
+   return draw(dom, plot._hist, 'hist').then(async hp => {
+      const arr = [];
+      for (let i = 0; i < plot._items.arr.length; ++i)
+         arr.push(draw(dom, plot._items.arr[i], plot._items.opt[i]));
+      return Promise.all(arr).then(() => hp);
+   });
+}
+
+export { TGraphTimePainter, drawRooPlot };

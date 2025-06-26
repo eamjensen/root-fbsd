@@ -55,7 +55,7 @@ public:
              const RooCmdArg& arg7={}, const RooCmdArg& arg8={}) ;
 
   RooProdPdf(const RooProdPdf& other, const char* name=nullptr) ;
-  TObject* clone(const char* newname) const override { return new RooProdPdf(*this,newname) ; }
+  TObject* clone(const char* newname=nullptr) const override { return new RooProdPdf(*this,newname) ; }
   ~RooProdPdf() override ;
 
   bool forceAnalyticalInt(const RooAbsArg& dep) const override ;
@@ -132,23 +132,40 @@ private:
 
   void initializeFromCmdArgList(const RooArgSet& fullPdfSet, const RooLinkedList& l) ;
 
-  void factorizeProduct(const RooArgSet& normSet, const RooArgSet& intSet,
-                        RooLinkedList& termList,   RooLinkedList& normList,
-                        RooLinkedList& impDepList, RooLinkedList& crossDepList,
-                        RooLinkedList& intList) const;
+  struct Factorized {
+     ~Factorized();
 
+     RooArgSet *termNormDeps(int i) const { return static_cast<RooArgSet*>(norms.At(i)); }
+     RooArgSet *termIntDeps(int i) const { return static_cast<RooArgSet*>(ints.At(i)); }
+     RooArgSet *termImpDeps(int i) const { return static_cast<RooArgSet*>(imps.At(i)); }
+     RooArgSet *termCrossDeps(int i) const { return static_cast<RooArgSet*>(cross.At(i)); }
+
+     RooLinkedList terms;
+     RooLinkedList norms;
+     RooLinkedList imps;
+     RooLinkedList ints;
+     RooLinkedList cross;
+  };
+
+  void factorizeProduct(const RooArgSet& normSet, const RooArgSet& intSet, Factorized &factorized) const;
   std::string makeRGPPName(const char* pfx, const RooArgSet& term, const RooArgSet& iset, const RooArgSet& nset, const char* isetRangeName) const ;
-  void groupProductTerms(std::list<std::vector<RooArgSet*>>& groupedTerms, RooArgSet& outerIntDeps,
-                         const RooLinkedList& terms, const RooLinkedList& norms,
-                         const RooLinkedList& imps, const RooLinkedList& ints, const RooLinkedList& cross) const ;
+  void groupProductTerms(std::list<std::vector<RooArgSet*>>& groupedTerms, RooArgSet& outerIntDeps, Factorized const &factorized) const;
 
 
 
   Int_t getPartIntList(const RooArgSet* nset, const RooArgSet* iset, const char* isetRangeName=nullptr) const ;
 
-  std::vector<RooAbsReal*> processProductTerm(const RooArgSet* nset, const RooArgSet* iset, const char* isetRangeName,
+  struct ProcessProductTermOutput {
+    bool isOwned = false;
+    RooAbsReal* x0 = nullptr;
+    std::unique_ptr<RooAbsReal> x1;
+    std::unique_ptr<RooAbsReal> x2;
+  };
+
+  ProcessProductTermOutput processProductTerm(const RooArgSet* nset, const RooArgSet* iset, const char* isetRangeName,
                      const RooArgSet* term,const RooArgSet& termNSet, const RooArgSet& termISet,
-                     bool& isOwned, bool forceWrap=false) const ;
+                     bool forceWrap=false) const ;
+
 
   CacheMode canNodeBeCached() const override { return RooAbsArg::NotAdvised ; } ;
   void setCacheAndTrackHints(RooArgSet&) override ;
@@ -212,8 +229,6 @@ public:
    inline bool canComputeBatchWithCuda() const override { return true; }
 
    inline void doEval(RooFit::EvalContext &ctx) const override { _prodPdf->doEvalImpl(this, *_cache, ctx); }
-
-   void translate(RooFit::Detail::CodeSquashContext &ctx) const override;
 
    inline ExtendMode extendMode() const override { return _prodPdf->extendMode(); }
    inline double expectedEvents(const RooArgSet * /*nset*/) const override

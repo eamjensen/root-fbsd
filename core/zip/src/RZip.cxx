@@ -203,9 +203,9 @@ static void R__zipZLIB(int cxlevel, int *srcsize, char *src, int *tgtsize, char 
     stream.next_out  = (Bytef*)(&tgt[HDRSIZE]);
     stream.avail_out = (uInt)(*tgtsize) - HDRSIZE;
 
-    stream.zalloc    = (alloc_func)0;
-    stream.zfree     = (free_func)0;
-    stream.opaque    = (voidpf)0;
+    stream.zalloc = nullptr;
+    stream.zfree = nullptr;
+    stream.opaque = nullptr;
 
     if (cxlevel > 9) cxlevel = 9;
     err = deflateInit(&stream, cxlevel);
@@ -240,12 +240,6 @@ static void R__zipZLIB(int cxlevel, int *srcsize, char *src, int *tgtsize, char 
     tgt[8] = (char)((l_in_size >> 16) & 0xff);
 
     *irep = stream.total_out + HDRSIZE;
-}
-
-
-void R__zip(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep) {
-   R__zipMultipleAlgorithm(cxlevel, srcsize, src, tgtsize, tgt, irep,
-                           ROOT::RCompressionSetting::EAlgorithm::kUseGlobal);
 }
 
 /**
@@ -421,9 +415,9 @@ void R__unzipZLIB(int *srcsize, unsigned char *src, int *tgtsize, unsigned char 
      stream.avail_in = (uInt)(*srcsize) - HDRSIZE;
      stream.next_out = (Bytef *)tgt;
      stream.avail_out = (uInt)(*tgtsize);
-     stream.zalloc = (alloc_func)0;
-     stream.zfree = (free_func)0;
-     stream.opaque = (voidpf)0;
+     stream.zalloc = nullptr;
+     stream.zfree = nullptr;
+     stream.opaque = nullptr;
 
      err = inflateInit(&stream);
      if (err != Z_OK) {

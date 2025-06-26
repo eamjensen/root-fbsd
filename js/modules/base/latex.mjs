@@ -200,7 +200,7 @@ symbolsRegexCache = new RegExp(Object.keys(symbols_map).sort((a, b) => (a.length
 /** @summary Simple replacement of latex letters
   * @private */
 translateLaTeX = str => {
-   while ((str.length > 2) && (str[0] === '{') && (str[str.length - 1] === '}'))
+   while ((str.length > 2) && (str.at(0) === '{') && (str.at(-1) === '}'))
       str = str.slice(1, str.length - 1);
 
    return str.replace(symbolsRegexCache, ch => symbols_map[ch]).replace(/\{\}/g, '');
@@ -216,6 +216,9 @@ extra_symbols_width = {945:1002,946:996,967:917,948:953,949:834,966:1149,947:847
 /** @summary Calculate approximate labels width
   * @private */
 function approximateLabelWidth(label, font, fsize) {
+   if (Number.isInteger(font))
+      font = new FontHandler(font, fsize);
+
    const len = label.length,
          symbol_width = (fsize || font.size) * font.aver_width;
    if (font.isMonospace())
@@ -259,7 +262,8 @@ const latex_features = [
    { name: '#tilde{', accent: '\u02DC', hasw: true }, // '\u0303'
    { name: '#slash{', accent: '\u2215' }, // '\u0337'
    { name: '#vec{', accent: '\u02ED', hasw: true }, // '\u0350' arrowhead
-   { name: '#frac{', twolines: 'line' },
+   { name: '#frac{', twolines: 'line', middle: true },
+   { name: '#splitmline{', twolines: true, middle: true },
    { name: '#splitline{', twolines: true },
    { name: '#sqrt[', arg: 'int', sqrt: true }, // root with arbitrary power
    { name: '#sqrt{', sqrt: true },             // square root
@@ -294,7 +298,7 @@ function remapSymbolTtfCode(code) {
       for (const key in symbols_map) {
          const symbol = symbols_map[key];
          if (symbol.length === 1) {
-            let letter = 0;
+            let letter;
             if (cnt < 54) {
                const opGreek = cnt;
                // see code in TLatex.cxx, line 1302
@@ -313,16 +317,16 @@ function remapSymbolTtfCode(code) {
                   case 81: letter = 0o44; break; // #exists
                }
             }
-            const code = symbol.charCodeAt(0);
-            if (code > 0x80)
-               symbolsPdfMap[code] = letter;
+            const scode = symbol.charCodeAt(0);
+            if (scode > 0x80)
+               symbolsPdfMap[scode] = letter;
          }
          if (++cnt > 54 + 82) break;
       }
       for (let k = 0; k < symbolsMap.length; ++k) {
-         const code = symbolsMap[k];
-         if (code)
-            symbolsPdfMap[code] = k + 33;
+         const scode2 = symbolsMap[k];
+         if (scode2)
+            symbolsPdfMap[scode2] = k + 33;
       }
    }
    return symbolsPdfMap[code] ?? code;
@@ -363,8 +367,8 @@ function replaceSymbolsInTextNode(node) {
    if (lasti < 0)
       return false;
 
-   if (lasti < txt.length-1)
-      new_html += txt.slice(lasti+1, txt.length);
+   if (lasti < txt.length - 1)
+      new_html += txt.slice(lasti + 1, txt.length);
 
    node.$originalHTML = node.innerHTML;
    node.$originalFont = node.getAttribute('font-family');
@@ -479,8 +483,8 @@ function parseLatex(node, arg, label, curr) {
          if (!match(lbrace)) {
             console.log(`not starting with ${lbrace} in ${label}`);
             return -1;
-         } else
-            label = label.slice(lbrace.length);
+         }
+         label = label.slice(lbrace.length);
       }
 
       while ((n !== 0) && (pos < label.length)) {
@@ -560,7 +564,8 @@ function parseLatex(node, arg, label, curr) {
             const g = curr.g || (alone ? node : currG()),
                   elem = g.append('svg:text');
 
-            if (alone && !curr.g) curr.g = elem;
+            if (alone && !curr.g)
+               curr.g = elem;
 
             // apply font attributes only once, inherited by all other elements
             if (curr.ufont) {
@@ -607,7 +612,7 @@ function parseLatex(node, arg, label, curr) {
                elem.attr('text-decoration', curr.deco);
                delete curr.deco; // inform that decoration was applied
             } else
-               curr.xgap = xgap; // may be used in accent or somewere else
+               curr.xgap = xgap; // may be used in accent or somewhere else
          } else
             addSpaces(nendspaces);
       }
@@ -667,15 +672,16 @@ function parseLatex(node, arg, label, curr) {
          curr.twolines = true;
 
          const line1 = extractSubLabel(), line2 = extractSubLabel(true);
-         if ((line1 === -1) || (line2 === -1)) return false;
+         if ((line1 === -1) || (line2 === -1))
+            return false;
 
          const gg = createGG(),
-               fscale = (curr.parent && curr.parent.twolines) ? 0.7 : 1,
+               fscale = curr.parent?.twolines ? 0.7 : 1,
                subpos1 = createSubPos(fscale);
 
          parseLatex(gg, arg, line1, subpos1);
 
-         const path = (found.twolines === 'line') ? createPath(gg) : null,
+         const path = found.twolines === 'line' ? createPath(gg) : null,
                subpos2 = createSubPos(fscale);
 
          parseLatex(gg, arg, line2, subpos2);
@@ -684,9 +690,9 @@ function parseLatex(node, arg, label, curr) {
                dw = subpos1.rect.width - subpos2.rect.width,
                dy = -curr.fsize*0.35; // approximate position of middle line
 
-         positionGNode(subpos1, (dw < 0 ? -dw/2 : 0), dy - subpos1.rect.y2, true);
+         positionGNode(subpos1, found.middle && (dw < 0) ? -dw/2 : 0, dy - subpos1.rect.y2, true);
 
-         positionGNode(subpos2, (dw > 0 ? dw/2 : 0), dy - subpos2.rect.y1, true);
+         positionGNode(subpos2, found.middle && (dw > 0) ? dw/2 : 0, dy - subpos2.rect.y1, true);
 
          path?.attr('d', `M0,${Math.round(dy)}h${Math.round(w - curr.fsize*0.1)}`);
 
@@ -948,7 +954,7 @@ function parseLatex(node, arg, label, curr) {
          if (found.name === '#color[')
             subpos.color = curr.painter.getColor(foundarg);
          else if (found.name === '#font[') {
-            subpos.font = new FontHandler(foundarg);
+            subpos.font = new FontHandler(foundarg, subpos.fsize);
             // here symbols embedding not works, use replacement
             if ((subpos.font.name === kSymbol) && !subpos.font.isSymbol) {
                subpos.font.isSymbol = kSymbol;
@@ -1028,11 +1034,18 @@ async function loadMathjax() {
    if (!loading && (typeof globalThis.MathJax !== 'undefined'))
       return globalThis.MathJax;
 
-   if (!loading) _mj_loading = [];
+   if (!loading)
+      _mj_loading = [];
 
-   const promise = new Promise(resolve => { _mj_loading ? _mj_loading.push(resolve) : resolve(globalThis.MathJax); });
+   const promise = new Promise(resolve => {
+      if (_mj_loading)
+         _mj_loading.push(resolve);
+      else
+         resolve(globalThis.MathJax);
+   });
 
-   if (loading) return promise;
+   if (loading)
+      return promise;
 
    const svg = {
        scale: 1,                      // global scaling factor for all expressions
@@ -1086,9 +1099,9 @@ async function loadMathjax() {
    return _loadJSDOM().then(handle => {
       JSDOM = handle.JSDOM;
       return import('mathjax');
-   }).then(mj => {
+   }).then(mj0 => {
       // return Promise with mathjax loading
-      mj.init({
+      mj0.init({
          loader: {
             load: ['input/tex', 'output/svg', '[tex]/color', '[tex]/upgreek', '[tex]/mathtools', '[tex]/physics']
           },
@@ -1436,10 +1449,18 @@ function applyAttributesToMathJax(painter, mj_node, svg, arg, font_size, svg_fac
    let mw = parseInt(svg.attr('width')),
        mh = parseInt(svg.attr('height'));
 
+   if (isNodeJs()) {
+      // workaround for NaN in viewBox produced by MathJax
+      const vb = svg.attr('viewBox');
+      if (isStr(vb) && vb.indexOf('NaN') > 0)
+         svg.attr('viewBox', vb.replaceAll('NaN', '600'));
+      // console.log('Problematic viewBox', vb, svg.select('text').node()?.innerHTML);
+   }
+
    if (Number.isInteger(mh) && Number.isInteger(mw)) {
       if (svg_factor > 0) {
-         mw = mw / svg_factor;
-         mh = mh / svg_factor;
+         mw /= svg_factor;
+         mh /= svg_factor;
          svg.attr('width', Math.round(mw)).attr('height', Math.round(mh));
       }
    } else {
@@ -1448,9 +1469,11 @@ function applyAttributesToMathJax(painter, mj_node, svg, arg, font_size, svg_fac
       mh = box.height || mh || 10;
    }
 
-   if ((svg_factor > 0) && arg.valign) arg.valign = arg.valign / svg_factor;
+   if ((svg_factor > 0) && arg.valign)
+      arg.valign /= svg_factor;
 
-   if (arg.valign === null) arg.valign = (font_size - mh) / 2;
+   if (arg.valign === null)
+      arg.valign = (font_size - mh) / 2;
 
    const sign = { x: 1, y: 1 };
    let nx = 'x', ny = 'y';
@@ -1475,10 +1498,8 @@ function applyAttributesToMathJax(painter, mj_node, svg, arg, font_size, svg_fac
       arg[ny] += sign.y * (arg.height - mh - arg.valign);
 
    let trans = makeTranslate(arg.x, arg.y) || '';
-   if (arg.rotate) {
-      if (trans) trans += ' ';
-      trans += `rotate(${arg.rotate})`;
-   }
+   if (arg.rotate)
+      trans += `${trans?' ':''}rotate(${arg.rotate})`;
 
    mj_node.attr('transform', trans || null).attr('visibility', null);
 }
@@ -1499,7 +1520,7 @@ async function produceMathjax(painter, mj_node, arg) {
 
               repairMathJaxSvgSize(painter, mj_node, svg, arg);
 
-              arg.applyAttributesToMathJax = applyAttributesToMathJax;
+              arg.mj_func = applyAttributesToMathJax;
               return true;
            });
 }

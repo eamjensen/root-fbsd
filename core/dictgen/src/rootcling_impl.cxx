@@ -2649,14 +2649,9 @@ int FinalizeStreamerInfoWriting(cling::Interpreter &interp, bool writeEmptyRootP
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int GenerateFullDict(std::ostream &dictStream,
-                     cling::Interpreter &interp,
-                     RScanner &scan,
-                     const ROOT::TMetaUtils::RConstructorTypes &ctorTypes,
-                     bool isSplit,
-                     bool isGenreflex,
-                     bool isSelXML,
-                     bool writeEmptyRootPCM)
+int GenerateFullDict(std::ostream &dictStream, std::string dictName, cling::Interpreter &interp, RScanner &scan,
+                     const ROOT::TMetaUtils::RConstructorTypes &ctorTypes, bool isSplit, bool isGenreflex,
+                     bool isSelXML, bool writeEmptyRootPCM)
 {
    ROOT::TMetaUtils::TNormalizedCtxt normCtxt(interp.getLookupHelper());
 
@@ -2794,6 +2789,11 @@ int GenerateFullDict(std::ostream &dictStream,
       ROOT::Internal::RStl::Instance().WriteClassInit(dictStream, interp, normCtxt, ctorTypes, needsCollectionProxy,
                                                       EmitStreamerInfo);
    }
+
+   std::vector<std::string> standaloneTargets;
+   ROOT::TMetaUtils::WriteStandaloneReadRules(dictStream, false, standaloneTargets, interp);
+   ROOT::TMetaUtils::WriteStandaloneReadRules(dictStream, true, standaloneTargets, interp);
+   ROOT::TMetaUtils::WriteRulesRegistration(dictStream, dictName, standaloneTargets);
 
    if (!gDriverConfig->fBuildingROOTStage1) {
       EmitTypedefs(scan.fSelectedTypedefs);
@@ -3488,7 +3488,7 @@ public:
       InterpreterCallbacks(interp),
       fFilesIncludedByLinkdef(filesIncludedByLinkdef){};
 
-   ~TRootClingCallbacks(){};
+   ~TRootClingCallbacks() override{};
 
    void InclusionDirective(clang::SourceLocation /*HashLoc*/, const clang::Token & /*IncludeTok*/,
                            llvm::StringRef FileName, bool IsAngled, clang::CharSourceRange /*FilenameRange*/,
@@ -3530,7 +3530,7 @@ public:
                          bool ForPragma) override {
       assert(M);
       using namespace clang;
-      if (llvm::StringRef(M->Name).endswith("ACLiC_dict")) {
+      if (llvm::StringRef(M->Name).ends_with("ACLiC_dict")) {
          Preprocessor& PP = m_Interpreter->getCI()->getPreprocessor();
          HeaderSearch& HS = PP.getHeaderSearchInfo();
          // FIXME: Reduce to Core.Rtypes.h.
@@ -3577,13 +3577,13 @@ public:
    {
    }
 
-   ~CheckModuleBuildClient()
+   ~CheckModuleBuildClient() override
    {
       if (fOwnsChild)
          delete fChild;
    }
 
-   virtual void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel, const clang::Diagnostic &Info) override
+   void HandleDiagnostic(clang::DiagnosticsEngine::Level DiagLevel, const clang::Diagnostic &Info) override
    {
       using namespace clang::diag;
 
@@ -3645,31 +3645,31 @@ public:
    }
 
    // All methods below just forward to the child and the default method.
-   virtual void clear() override
+   void clear() override
    {
       fChild->clear();
       DiagnosticConsumer::clear();
    }
 
-   virtual void BeginSourceFile(const clang::LangOptions &LangOpts, const clang::Preprocessor *PP) override
+   void BeginSourceFile(const clang::LangOptions &LangOpts, const clang::Preprocessor *PP) override
    {
       fChild->BeginSourceFile(LangOpts, PP);
       DiagnosticConsumer::BeginSourceFile(LangOpts, PP);
    }
 
-   virtual void EndSourceFile() override
+   void EndSourceFile() override
    {
       fChild->EndSourceFile();
       DiagnosticConsumer::EndSourceFile();
    }
 
-   virtual void finish() override
+   void finish() override
    {
       fChild->finish();
       DiagnosticConsumer::finish();
    }
 
-   virtual bool IncludeInDiagnosticCounts() const override { return fChild->IncludeInDiagnosticCounts(); }
+   bool IncludeInDiagnosticCounts() const override { return fChild->IncludeInDiagnosticCounts(); }
 };
 
 static void MaybeSuppressWin32CrashDialogs() {
@@ -3907,12 +3907,12 @@ static bool ModuleContainsHeaders(TModuleGenerator &modGen, clang::HeaderSearch 
       if (auto FE = headerSearch.LookupFile(
                header, clang::SourceLocation(),
                /*isAngled*/ false,
-               /*FromDir*/ 0, CurDir,
+               /*FromDir*/ nullptr, CurDir,
                clang::ArrayRef<std::pair<clang::OptionalFileEntryRef, clang::DirectoryEntryRef>>(),
-               /*SearchPath*/ 0,
-               /*RelativePath*/ 0,
-               /*RequestingModule*/ 0, &SuggestedModule,
-               /*IsMapped*/ 0,
+               /*SearchPath*/ nullptr,
+               /*RelativePath*/ nullptr,
+               /*RequestingModule*/ nullptr, &SuggestedModule,
+               /*IsMapped*/ nullptr,
                /*IsFrameworkFound*/ nullptr,
                /*SkipCache*/ false,
                /*BuildSystemModule*/ false,
@@ -4396,6 +4396,8 @@ int RootClingMain(int argc,
       const char ** &extraArgs = *gDriverConfig->fTROOT__GetExtraInterpreterArgs();
       extraArgs = &clingArgsC[1]; // skip binary name
       interpPtr = gDriverConfig->fTCling__GetInterpreter();
+      if (!interpPtr->getCI()) // Compiler instance could not be created. See https://its.cern.ch/jira/browse/ROOT-10239
+         return 1;
       if (!isGenreflex && !gOptGeneratePCH) {
          std::unique_ptr<TRootClingCallbacks> callBacks (new TRootClingCallbacks(interpPtr, filesIncludedByLinkdef));
          interpPtr->setCallbacks(std::move(callBacks));
@@ -4452,7 +4454,7 @@ int RootClingMain(int argc,
 
    if (gOptCxxModule) {
       for (llvm::StringRef DepMod : gOptModuleDependencies) {
-         if (DepMod.endswith("_rdict.pcm")) {
+         if (DepMod.ends_with("_rdict.pcm")) {
             ROOT::TMetaUtils::Warning(nullptr, "'%s' value is deprecated. Please use [<fullpath>]%s.pcm\n",
                                       DepMod.data(),
                                       GetModuleNameFromRdictName(DepMod).str().data());
@@ -4959,14 +4961,8 @@ int RootClingMain(int argc,
          rootclingRetCode +=  FinalizeStreamerInfoWriting(interp);
       }
    } else {
-      rootclingRetCode += GenerateFullDict(*splitDictStream,
-                                 interp,
-                                 scan,
-                                 constructorTypes,
-                                 gOptSplit,
-                                 isGenreflex,
-                                 isSelXML,
-                                 gOptWriteEmptyRootPCM);
+      rootclingRetCode += GenerateFullDict(*splitDictStream, modGen.GetDictionaryName(), interp, scan, constructorTypes,
+                                           gOptSplit, isGenreflex, isSelXML, gOptWriteEmptyRootPCM);
    }
 
    if (rootclingRetCode != 0) {

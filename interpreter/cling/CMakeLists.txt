@@ -1,12 +1,4 @@
-if(WIN32)
-  # We need cmake to support exporting of symbols not only from libraries but
-  # from executables too. This way cling can find symbols from its own
-  # executable during runtime.
-  cmake_minimum_required(VERSION 3.6.2)
-else(WIN32)
-  # support of earlier cmake versions will be removed soon
-  cmake_minimum_required(VERSION 3.5)
-endif(WIN32)
+cmake_minimum_required(VERSION 3.10)
 
 # If we are not building as a part of LLVM, build Cling as an
 # standalone project, using LLVM as an external library:
@@ -16,14 +8,14 @@ if( CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR )
   # See <https://llvm.org/docs/CMake.html#embedding-llvm-in-your-project>.
   find_package(LLVM REQUIRED CONFIG)
   message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_CMAKE_DIR}")
 
   separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
   add_definitions(${LLVM_DEFINITIONS_LIST})
 
   find_package(Clang REQUIRED CONFIG)
   message(STATUS "Found supported version: Clang ${CLANG_PACKAGE_VERSION}")
-  message(STATUS "Using ClangConfig.cmake in: ${Clang_DIR}")
+  message(STATUS "Using ClangConfig.cmake in: ${CLANG_CMAKE_DIR}")
 
   find_program(LLVM_TABLEGEN_EXE "llvm-tblgen" ${LLVM_TOOLS_BINARY_DIR}
     NO_DEFAULT_PATH)
@@ -111,6 +103,7 @@ else()
     list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_PATH}")
     include(${LLVMCONFIG_FILE})
   endif()
+  set(CLANG_CMAKE_DIR "${CMAKE_BINARY_DIR}/lib${LLVM_LIBDIR_SUFFIX}/cmake/clang")
   if (NOT CLANG_INCLUDE_DIRS)
     set (CLANG_INCLUDE_DIRS "${LLVM_MAIN_SRC_DIR}/tools/clang/include")
     if (NOT EXISTS ${CLANG_INCLUDE_DIRS})

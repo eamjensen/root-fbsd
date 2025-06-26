@@ -46,7 +46,6 @@ computation times.
 #include <stdexcept>
 #include <vector>
 
-ClassImp(RooFit::Detail::RooNLLVarNew);
 
 namespace RooFit {
 namespace Detail {
@@ -254,11 +253,10 @@ void RooNLLVarNew::doEval(RooFit::EvalContext &ctx) const
 
    auto probas = ctx.at(_pdf);
 
-   _sumWeight = weights.size() == 1 ? weights[0] * probas.size()
-                                    : RooBatchCompute::reduceSum(config, weights.data(), weights.size());
-   if (_expectedEvents && _weightSquared && _sumWeight2 == 0.0) {
-      _sumWeight2 = weights.size() == 1 ? weightsSumW2[0] * probas.size()
-                                        : RooBatchCompute::reduceSum(config, weightsSumW2.data(), weightsSumW2.size());
+   double sumWeight = RooBatchCompute::reduceSum(config, weights.data(), weights.size());
+   double sumWeight2 = 0.;
+   if (_expectedEvents && _weightSquared) {
+      sumWeight2 = RooBatchCompute::reduceSum(config, weightsSumW2.data(), weightsSumW2.size());
    }
 
    auto nllOut = RooBatchCompute::reduceNLL(config, probas, _weightSquared ? weightsSumW2 : weights,
@@ -277,10 +275,10 @@ void RooNLLVarNew::doEval(RooFit::EvalContext &ctx) const
 
    if (_expectedEvents) {
       std::span<const double> expected = ctx.at(*_expectedEvents);
-      nllOut.nllSum += _pdf->extendedTerm(_sumWeight, expected[0], _weightSquared ? _sumWeight2 : 0.0, _doBinOffset);
+      nllOut.nllSum += _pdf->extendedTerm(sumWeight, expected[0], _weightSquared ? sumWeight2 : 0.0, _doBinOffset);
    }
 
-   finalizeResult(ctx, {nllOut.nllSum, nllOut.nllSumCarry}, _sumWeight);
+   finalizeResult(ctx, {nllOut.nllSum, nllOut.nllSumCarry}, sumWeight);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -336,47 +334,6 @@ void RooNLLVarNew::finalizeResult(RooFit::EvalContext &ctx, ROOT::Math::KahanSum
    ctx.setOutputWithOffset(this, result, _offset);
 }
 
-void RooNLLVarNew::translate(RooFit::Detail::CodeSquashContext &ctx) const
-{
-   if (_binnedL && !_pdf->getAttribute("BinnedLikelihoodActiveYields")) {
-      std::stringstream errorMsg;
-      errorMsg << "RooNLLVarNew::translate(): binned likelihood optimization is only supported when raw pdf "
-                  "values can be interpreted as yields."
-               << " This is not the case for HistFactory models written with ROOT versions before 6.26.00";
-      coutE(InputArguments) << errorMsg.str() << std::endl;
-      throw std::runtime_error(errorMsg.str());
-   }
-
-   std::string weightSumName = RooFit::Detail::makeValidVarName(GetName()) + "WeightSum";
-   std::string resName = RooFit::Detail::makeValidVarName(GetName()) + "Result";
-   ctx.addResult(this, resName);
-   ctx.addToGlobalScope("double " + weightSumName + " = 0.0;\n");
-   ctx.addToGlobalScope("double " + resName + " = 0.0;\n");
-
-   const bool needWeightSum = _expectedEvents || _simCount > 1;
-
-   if (needWeightSum) {
-      auto scope = ctx.beginLoop(this);
-      ctx.addToCodeBody(weightSumName + " += " + ctx.getResult(*_weightVar) + ";\n");
-   }
-   if (_simCount > 1) {
-      std::string simCountStr = std::to_string(static_cast<double>(_simCount));
-      ctx.addToCodeBody(resName + " += " + weightSumName + " * std::log(" + simCountStr + ");\n");
-   }
-
-   // Begin loop scope for the observables and weight variable. If the weight
-   // is a scalar, the context will ignore it for the loop scope. The closing
-   // brackets of the loop is written at the end of the scopes lifetime.
-   {
-      auto scope = ctx.beginLoop(this);
-      std::string term = ctx.buildCall("RooFit::Detail::MathFuncs::nll", _pdf, _weightVar, _binnedL, 0);
-      ctx.addToCodeBody(this, resName + " += " + term + ";");
-   }
-   if (_expectedEvents) {
-      std::string expected = ctx.getResult(**_expectedEvents);
-      ctx.addToCodeBody(resName + " += " + expected + " - " + weightSumName + " * std::log(" + expected + ");\n");
-   }
-}
 } // namespace Detail
 } // namespace RooFit
 

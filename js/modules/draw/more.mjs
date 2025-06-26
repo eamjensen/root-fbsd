@@ -1,7 +1,7 @@
-import { BIT, isFunc, clTLatex, clTMathText, clTAnnotation } from '../core.mjs';
+import { BIT, isFunc, clTLatex, clTLink, clTMathText, clTAnnotation } from '../core.mjs';
 import { BasePainter, makeTranslate, DrawOptions } from '../base/BasePainter.mjs';
 import { addMoveHandler } from '../gui/utils.mjs';
-import { assignContextMenu, kToFront } from '../gui/menu.mjs';
+import { assignContextMenu } from '../gui/menu.mjs';
 
 
 /** @summary Draw TText
@@ -9,8 +9,6 @@ import { assignContextMenu, kToFront } from '../gui/menu.mjs';
 async function drawText() {
    const text = this.getObject(),
          pp = this.getPadPainter(),
-         w = pp.getPadWidth(),
-         h = pp.getPadHeight(),
          fp = this.getFramePainter(),
          is_url = text.fName.startsWith('http://') || text.fName.startsWith('https://');
    let pos_x = text.fX, pos_y = text.fY, use_frame = false,
@@ -52,10 +50,9 @@ async function drawText() {
 
    const arg = this.textatt.createArg({ x: this.pos_x, y: this.pos_y, text: text.fTitle, latex: 0 });
 
-   if ((text._typename === clTLatex) || annot) {
+   if ((text._typename === clTLatex) || annot)
       arg.latex = 1;
-      fact = 0.9;
-   } else if (text._typename === clTMathText) {
+   else if (text._typename === clTMathText) {
       arg.latex = 2;
       fact = 0.8;
    }
@@ -66,11 +63,17 @@ async function drawText() {
          this.draw_g.append('svg:title').text(`link on ${text.fName}`);
    }
 
-   return this.startTextDrawingAsync(this.textatt.font, this.textatt.getSize(w, h, fact, 0.05))
+   return this.startTextDrawingAsync(this.textatt.font, this.textatt.getSize(pp, fact /* , 0.05 */))
               .then(() => this.drawText(arg))
               .then(() => this.finishTextDrawing())
               .then(() => {
-      if (this.isBatchMode()) return this;
+      if (this.isBatchMode())
+         return this;
+
+      if (pp.isButton() && !pp.isEditable()) {
+         this.draw_g.on('click', () => this.getCanvPainter().selectActivePad(pp));
+         return this;
+      }
 
       this.pos_dx = this.pos_dy = 0;
 
@@ -85,14 +88,14 @@ async function drawText() {
       if (!this.moveEnd) {
          this.moveEnd = function(not_changed) {
             if (not_changed) return;
-            const text = this.getObject();
+            const txt = this.getObject();
             let fx = this.svgToAxis('x', this.pos_x + this.pos_dx, this.isndc),
                 fy = this.svgToAxis('y', this.pos_y + this.pos_dy, this.isndc);
             if (this.swap_xy)
                [fx, fy] = [fy, fx];
 
-            text.fX = fx;
-            text.fY = fy;
+            txt.fX = fx;
+            txt.fY = fy;
             this.submitCanvExec(`SetX(${fx});;SetY(${fy});;`);
          };
       }
@@ -109,7 +112,19 @@ async function drawText() {
          };
       }
 
-      assignContextMenu(this, kToFront);
+      assignContextMenu(this);
+
+      this.fillContextMenuItems = function(menu) {
+         menu.add('Change text', () => menu.input('Enter new text', text.fTitle).then(t => {
+            text.fTitle = t;
+            this.interactiveRedraw('pad', `exec:SetTitle("${t}")`);
+         }));
+      };
+
+      if (this.matchObjectType(clTLink)) {
+         this.draw_g.style('cursor', 'pointer')
+                    .on('click', () => this.submitCanvExec('ExecuteEvent(kButton1Up, 0, 0);;'));
+      }
 
       this.fillContextMenuItems = function(menu) {
          menu.add('Change text', () => menu.input('Enter new text', text.fTitle).then(t => {
@@ -138,13 +153,15 @@ function drawEllipse() {
          x = funcs.x(ellipse.fX1),
          y = funcs.y(ellipse.fY1),
          rx = is_crown && (ellipse.fR1 <= 0) ? (funcs.x(ellipse.fX1 + ellipse.fR2) - x) : (funcs.x(ellipse.fX1 + ellipse.fR1) - x),
-         ry = y - funcs.y(ellipse.fY1 + ellipse.fR2);
+         ry = y - funcs.y(ellipse.fY1 + ellipse.fR2),
+         dr = Math.PI/180;
 
    let path = '';
 
    if (is_crown && (ellipse.fR1 > 0)) {
-      const rx1 = rx, ry2 = ry,
-            ry1 = y - funcs.y(ellipse.fY1 + ellipse.fR1),
+      const ratio = ellipse.fYXRatio ?? 1,
+            rx1 = rx, ry2 = ratio * ry,
+            ry1 = ratio * (y - funcs.y(ellipse.fY1 + ellipse.fR1)),
             rx2 = funcs.x(ellipse.fX1 + ellipse.fR2) - x;
 
       if (closed_ellipse) {
@@ -152,7 +169,7 @@ function drawEllipse() {
                 `M${-rx2},0A${rx2},${ry2},0,1,0,${rx2},0A${rx2},${ry2},0,1,0,${-rx2},0`;
       } else {
          const large_arc = (ellipse.fPhimax-ellipse.fPhimin>=180) ? 1 : 0,
-               a1 = ellipse.fPhimin*Math.PI/180, a2 = ellipse.fPhimax*Math.PI/180,
+               a1 = ellipse.fPhimin*dr, a2 = ellipse.fPhimax*dr,
                dx1 = Math.round(rx1*Math.cos(a1)), dy1 = Math.round(ry1*Math.sin(a1)),
                dx2 = Math.round(rx1*Math.cos(a2)), dy2 = Math.round(ry1*Math.sin(a2)),
                dx3 = Math.round(rx2*Math.cos(a1)), dy3 = Math.round(ry2*Math.sin(a1)),
@@ -165,22 +182,22 @@ function drawEllipse() {
       if (closed_ellipse)
          path = `M${-rx},0A${rx},${ry},0,1,0,${rx},0A${rx},${ry},0,1,0,${-rx},0Z`;
       else {
-         const x1 = Math.round(rx * Math.cos(ellipse.fPhimin*Math.PI/180)),
-               y1 = Math.round(ry * Math.sin(ellipse.fPhimin*Math.PI/180)),
-               x2 = Math.round(rx * Math.cos(ellipse.fPhimax*Math.PI/180)),
-               y2 = Math.round(ry * Math.sin(ellipse.fPhimax*Math.PI/180));
+         const x1 = Math.round(rx * Math.cos(ellipse.fPhimin*dr)),
+               y1 = Math.round(ry * Math.sin(ellipse.fPhimin*dr)),
+               x2 = Math.round(rx * Math.cos(ellipse.fPhimax*dr)),
+               y2 = Math.round(ry * Math.sin(ellipse.fPhimax*dr));
          path = `M0,0L${x1},${y1}A${rx},${ry},0,1,1,${x2},${y2}Z`;
       }
    } else {
-     const ct = Math.cos(ellipse.fTheta*Math.PI/180),
-           st = Math.sin(ellipse.fTheta*Math.PI/180),
-           phi1 = ellipse.fPhimin*Math.PI/180,
-           phi2 = ellipse.fPhimax*Math.PI/180,
-           np = 200,
-           dphi = (phi2-phi1) / (np - (closed_ellipse ? 0 : 1));
-     let lastx = 0, lasty = 0;
-     if (!closed_ellipse) path = 'M0,0';
-     for (let n = 0; n < np; ++n) {
+      const ct = Math.cos(ellipse.fTheta*dr),
+            st = Math.sin(ellipse.fTheta*dr),
+            phi1 = ellipse.fPhimin*dr,
+            phi2 = ellipse.fPhimax*dr,
+            np = 200,
+            dphi = (phi2-phi1) / (np - (closed_ellipse ? 0 : 1));
+      let lastx = 0, lasty = 0;
+      if (!closed_ellipse) path = 'M0,0';
+      for (let n = 0; n < np; ++n) {
          const angle = phi1 + n*dphi,
                dx = ellipse.fR1 * Math.cos(angle),
                dy = ellipse.fR2 * Math.sin(angle),
@@ -195,8 +212,8 @@ function drawEllipse() {
          else
             path += `l${px-lastx},${py-lasty}`;
          lastx = px; lasty = py;
-     }
-     path += 'Z';
+      }
+      path += 'Z';
    }
 
    this.x = x;
@@ -207,7 +224,7 @@ function drawEllipse() {
       .call(this.lineatt.func)
       .call(this.fillatt.func);
 
-   assignContextMenu(this, kToFront);
+   assignContextMenu(this);
 
    addMoveHandler(this);
 
@@ -219,10 +236,10 @@ function drawEllipse() {
 
    this.moveEnd = function(not_changed) {
       if (not_changed) return;
-      const ellipse = this.getObject();
-      ellipse.fX1 = this.svgToAxis('x', this.x);
-      ellipse.fY1 = this.svgToAxis('y', this.y);
-      this.submitCanvExec(`SetX1(${ellipse.fX1});;SetY1(${ellipse.fY1});;Notify();;`);
+      const ell = this.getObject();
+      ell.fX1 = this.svgToAxis('x', this.x);
+      ell.fY1 = this.svgToAxis('y', this.y);
+      this.submitCanvExec(`SetX1(${ell.fX1});;SetY1(${ell.fY1});;Notify();;`);
    };
 }
 
@@ -296,7 +313,7 @@ function drawMarker() {
           .call(this.markeratt.func);
    }
 
-   assignContextMenu(this, kToFront);
+   assignContextMenu(this);
 
    addMoveHandler(this);
 
@@ -305,18 +322,20 @@ function drawMarker() {
    this.moveDrag = function(dx, dy) {
       this.dx += dx;
       this.dy += dy;
-      makeTranslate(this.draw_g.select('path'), this.dx, this.dy);
+      if (this.draw_g)
+         makeTranslate(this.draw_g.select('path'), this.dx, this.dy);
    };
 
    this.moveEnd = function(not_changed) {
-      if (not_changed) return;
-      const marker = this.getObject();
-      let fx = this.svgToAxis('x', this.axisToSvg('x', marker.fX, this.isndc) + this.dx, this.isndc),
-          fy = this.svgToAxis('y', this.axisToSvg('y', marker.fY, this.isndc) + this.dy, this.isndc);
+      if (not_changed || !this.draw_g)
+         return;
+      const mrk = this.getObject();
+      let fx = this.svgToAxis('x', this.axisToSvg('x', mrk.fX, this.isndc) + this.dx, this.isndc),
+          fy = this.svgToAxis('y', this.axisToSvg('y', mrk.fY, this.isndc) + this.dy, this.isndc);
       if (swap_xy)
          [fx, fy] = [fy, fx];
-      marker.fX = fx;
-      marker.fY = fy;
+      mrk.fX = fx;
+      mrk.fY = fy;
       this.submitCanvExec(`SetX(${fx});;SetY(${fy});;Notify();;`);
       this.redraw();
    };
@@ -342,7 +361,7 @@ function drawPolyMarker() {
           .call(this.markeratt.func);
    }
 
-   assignContextMenu(this, kToFront);
+   assignContextMenu(this);
 
    addMoveHandler(this);
 
@@ -356,15 +375,15 @@ function drawPolyMarker() {
 
    this.moveEnd = function(not_changed) {
       if (not_changed) return;
-      const poly = this.getObject(),
-            func = this.getAxisToSvgFunc();
+      const poly2 = this.getObject(),
+            func2 = this.getAxisToSvgFunc();
 
       let exec = '';
-      for (let n = 0; n <= poly.fLastPoint; ++n) {
-         const x = this.svgToAxis('x', func.x(poly.fX[n]) + this.dx),
-               y = this.svgToAxis('y', func.y(poly.fY[n]) + this.dy);
-         poly.fX[n] = x;
-         poly.fY[n] = y;
+      for (let n = 0; n <= poly2.fLastPoint; ++n) {
+         const x = this.svgToAxis('x', func2.x(poly2.fX[n]) + this.dx),
+               y = this.svgToAxis('y', func2.y(poly2.fY[n]) + this.dy);
+         poly2.fX[n] = x;
+         poly2.fY[n] = y;
          exec += `SetPoint(${n},${x},${y});;`;
       }
       this.submitCanvExec(exec + 'Notify();;');

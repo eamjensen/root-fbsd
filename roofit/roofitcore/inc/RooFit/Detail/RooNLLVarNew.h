@@ -55,7 +55,11 @@ public:
 
    void setSimCount(int simCount) { _simCount = simCount; }
 
-   void translate(RooFit::Detail::CodeSquashContext &ctx) const override;
+   RooAbsPdf const &pdf() const { return *_pdf; }
+   RooAbsReal const &weightVar() const { return *_weightVar; }
+   bool binnedL() const { return _binnedL; }
+   int simCount() const { return _simCount; }
+   RooAbsReal const *expectedEvents() const { return _expectedEvents ? &**_expectedEvents : nullptr; }
 
    RooAbsPdf const &pdf() const { return *_pdf; }
    RooAbsReal const &weightVar() const { return *_weightVar; }
@@ -75,8 +79,6 @@ private:
    RooTemplateProxy<RooAbsReal> _weightSquaredVar;
    std::unique_ptr<RooTemplateProxy<RooAbsReal>> _expectedEvents;
    std::unique_ptr<RooTemplateProxy<RooAbsPdf>> _offsetPdf;
-   mutable double _sumWeight = 0.0;  //!
-   mutable double _sumWeight2 = 0.0; //!
    bool _weightSquared = false;
    bool _binnedL = false;
    bool _doOffset = false;

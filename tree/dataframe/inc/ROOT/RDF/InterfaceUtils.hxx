@@ -250,9 +250,12 @@ struct SnapshotHelperArgs {
    std::string fTreeName;
    std::vector<std::string> fOutputColNames;
    ROOT::RDF::RSnapshotOptions fOptions;
+   ROOT::Detail::RDF::RLoopManager *fOutputLoopManager;
+   ROOT::Detail::RDF::RLoopManager *fInputLoopManager;
+   bool fToNTuple;
 };
 
-// Snapshot action
+// SnapshotTTree action
 template <typename... ColTypes, typename PrevNodeType>
 std::unique_ptr<RActionBase>
 BuildAction(const ColumnNames_t &colNames, const std::shared_ptr<SnapshotHelperArgs> &snapHelperArgs,
@@ -264,6 +267,8 @@ BuildAction(const ColumnNames_t &colNames, const std::shared_ptr<SnapshotHelperA
    const auto &treename = snapHelperArgs->fTreeName;
    const auto &outputColNames = snapHelperArgs->fOutputColNames;
    const auto &options = snapHelperArgs->fOptions;
+   const auto &lmPtr = snapHelperArgs->fOutputLoopManager;
+   const auto &inputLM = snapHelperArgs->fInputLoopManager;
 
    auto sz = sizeof...(ColTypes);
    std::vector<bool> isDefine(sz);
@@ -271,20 +276,38 @@ BuildAction(const ColumnNames_t &colNames, const std::shared_ptr<SnapshotHelperA
       isDefine[i] = colRegister.IsDefineOrAlias(colNames[i]);
 
    std::unique_ptr<RActionBase> actionPtr;
-   if (!ROOT::IsImplicitMTEnabled()) {
-      // single-thread snapshot
-      using Helper_t = SnapshotHelper<ColTypes...>;
-      using Action_t = RAction<Helper_t, PrevNodeType>;
-      actionPtr.reset(
-         new Action_t(Helper_t(filename, dirname, treename, colNames, outputColNames, options, std::move(isDefine)),
-                      colNames, prevNode, colRegister));
+   if (snapHelperArgs->fToNTuple) {
+      if (!ROOT::IsImplicitMTEnabled()) {
+         // single-thread snapshot
+         using Helper_t = SnapshotRNTupleHelper<ColTypes...>;
+         using Action_t = RAction<Helper_t, PrevNodeType>;
+
+         actionPtr.reset(new Action_t(
+            Helper_t(filename, dirname, treename, colNames, outputColNames, options, lmPtr, std::move(isDefine)),
+            colNames, prevNode, colRegister));
+      } else {
+         // multi-thread snapshot to RNTuple is not yet supported
+         // TODO(fdegeus) Add MT snapshotting
+         throw std::runtime_error("Snapshot: Snapshotting to RNTuple with IMT enabled is not supported yet.");
+      }
+
+      return actionPtr;
    } else {
-      // multi-thread snapshot
-      using Helper_t = SnapshotHelperMT<ColTypes...>;
-      using Action_t = RAction<Helper_t, PrevNodeType>;
-      actionPtr.reset(new Action_t(
-         Helper_t(nSlots, filename, dirname, treename, colNames, outputColNames, options, std::move(isDefine)),
-         colNames, prevNode, colRegister));
+      if (!ROOT::IsImplicitMTEnabled()) {
+         // single-thread snapshot
+         using Helper_t = SnapshotTTreeHelper<ColTypes...>;
+         using Action_t = RAction<Helper_t, PrevNodeType>;
+         actionPtr.reset(new Action_t(Helper_t(filename, dirname, treename, colNames, outputColNames, options,
+                                               std::move(isDefine), lmPtr, inputLM),
+                                      colNames, prevNode, colRegister));
+      } else {
+         // multi-thread snapshot
+         using Helper_t = SnapshotTTreeHelperMT<ColTypes...>;
+         using Action_t = RAction<Helper_t, PrevNodeType>;
+         actionPtr.reset(new Action_t(Helper_t(nSlots, filename, dirname, treename, colNames, outputColNames, options,
+                                               std::move(isDefine), lmPtr, inputLM),
+                                      colNames, prevNode, colRegister));
+      }
    }
    return actionPtr;
 }
@@ -384,8 +407,15 @@ std::vector<bool> FindUndefinedDSColumns(const ColumnNames_t &requestedCols, con
 template <typename T>
 void AddDSColumnsHelper(const std::string &colName, RLoopManager &lm, RDataSource &ds, RColumnRegister &colRegister)
 {
-   if (colRegister.IsDefineOrAlias(colName) || !ds.HasColumn(colName) ||
-       lm.HasDataSourceColumnReaders(colName, typeid(T)))
+
+   if (colRegister.IsDefineOrAlias(colName))
+      return;
+
+   if (lm.HasDataSourceColumnReaders(colName, typeid(T)))
+      return;
+
+   if (!ds.HasColumn(colName) &&
+       lm.GetSuppressErrorsForMissingBranches().find(colName) == lm.GetSuppressErrorsForMissingBranches().end())
       return;
 
    const auto nSlots = lm.GetNSlots();
@@ -400,7 +430,8 @@ void AddDSColumnsHelper(const std::string &colName, RLoopManager &lm, RDataSourc
    } else { // using the new GetColumnReaders mechanism
       // TODO consider changing the interface so we return all of these for all slots in one go
       for (auto slot = 0u; slot < lm.GetNSlots(); ++slot)
-         colReaders.emplace_back(ds.GetColumnReaders(slot, colName, typeid(T)));
+         colReaders.emplace_back(
+            ROOT::Internal::RDF::CreateColumnReader(ds, slot, colName, typeid(T), /*treeReader*/ nullptr));
    }
 
    lm.AddDataSourceColumnReaders(colName, std::move(colReaders), typeid(T));
@@ -512,7 +543,7 @@ void JitDefineHelper(F &&f, const char **colsPtr, std::size_t colsSize, std::str
    using ColTypes_t = typename TTraits::CallableTraits<Callable_t>::arg_types;
 
    auto ds = lm->GetDataSource();
-   if (ds != nullptr)
+   if (ds != nullptr && colsPtr)
       AddDSColumns(cols, *lm, *ds, ColTypes_t(), *colRegister);
 
    // will never actually be used (trumped by jittedDefine->GetTypeName()), but we set it to something meaningful
@@ -772,10 +803,11 @@ template <typename T>
 using InnerValueType_t = typename InnerValueType<T>::type;
 
 std::pair<std::vector<std::string>, std::vector<std::string>>
-AddSizeBranches(const std::vector<std::string> &branches, TTree *tree, std::vector<std::string> &&colsWithoutAliases,
-                std::vector<std::string> &&colsWithAliases);
+AddSizeBranches(const std::vector<std::string> &branches, ROOT::RDF::RDataSource *ds,
+                std::vector<std::string> &&colsWithoutAliases, std::vector<std::string> &&colsWithAliases);
 
 void RemoveDuplicates(ColumnNames_t &columnNames);
+void RemoveRNTupleSubFields(ColumnNames_t &columnNames);
 
 } // namespace RDF
 } // namespace Internal

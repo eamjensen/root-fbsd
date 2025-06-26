@@ -11,19 +11,25 @@ import { TH1Painter as TH1Painter2D } from '../hist2d/TH1Painter.mjs';
 class TH1Painter extends TH1Painter2D {
 
    /** @summary draw TH1 object in 3D mode */
-   draw3D(reason) {
+   async draw3D(reason) {
       this.mode3d = true;
 
       const main = this.getFramePainter(), // who makes axis drawing
             is_main = this.isMainPainter(), // is main histogram
             histo = this.getHisto(),
             zmult = 1 + 2*gStyle.fHistTopMargin;
-      let pr = Promise.resolve(true);
+      let pr = Promise.resolve(true), full_draw = true;
 
       if (reason === 'resize') {
-         if (is_main && main.resize3D())
-            main.render3D();
-      } else {
+         const res = is_main ? main.resize3D() : false;
+         if (res !== 1) {
+            full_draw = false;
+            if (res)
+               main.render3D();
+         }
+      }
+
+      if (full_draw) {
          this.createHistDrawAttributes(true);
 
          this.scanContent(reason === 'zoom'); // may be required for axis drawings
@@ -51,7 +57,7 @@ class TH1Painter extends TH1Painter2D {
       }
 
       if (is_main)
-         pr = pr.then(() => this.drawColorPalette(this.options.Zscale && ((this.options.Lego === 12) || (this.options.Lego === 14))));
+         pr = pr.then(() => this.drawColorPalette(this.options.Zscale && this.options.canHavePalette()));
 
       return pr.then(() => this.updateFunctions())
                .then(() => this.updateHistTitle())

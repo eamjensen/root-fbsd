@@ -69,7 +69,7 @@ public:
 
 } // anonymous namespace
 
-ROOT::Experimental::RResult<void>
+ROOT::RResult<void>
 ROOT::Experimental::RNTupleImporter::RCStringTransformation::Transform(const RImportBranch &branch, RImportField &field)
 {
    *reinterpret_cast<std::string *>(field.fFieldBuffer) = reinterpret_cast<const char *>(branch.fBranchBuffer.get());
@@ -127,7 +127,7 @@ ROOT::Experimental::RNTupleImporter::Create(TTree *sourceTree, std::string_view 
    return importer;
 }
 
-ROOT::Experimental::RResult<void> ROOT::Experimental::RNTupleImporter::InitDestination(std::string_view destFileName)
+ROOT::RResult<void> ROOT::Experimental::RNTupleImporter::InitDestination(std::string_view destFileName)
 {
    fDestFileName = destFileName;
    fDestFile = std::unique_ptr<TFile>(TFile::Open(fDestFileName.c_str(), "UPDATE"));
@@ -143,7 +143,7 @@ void ROOT::Experimental::RNTupleImporter::ReportSchema()
    for (const auto &f : fImportFields) {
       std::cout << "Importing '" << f.fField->GetFieldName() << "' [" << f.fField->GetTypeName() << "]\n";
    }
-   for (const auto &f : Internal::GetProjectedFieldsOfModel(*fModel).GetFieldZero().GetSubFields()) {
+   for (const auto &f : ROOT::Internal::GetProjectedFieldsOfModel(*fModel).GetFieldZero().GetConstSubfields()) {
       std::cout << "Importing (projected) '" << f->GetFieldName() << "' [" << f->GetTypeName() << "]\n";
    }
 }
@@ -154,11 +154,11 @@ void ROOT::Experimental::RNTupleImporter::ResetSchema()
    fImportFields.clear();
    fLeafCountCollections.clear();
    fImportTransformations.clear();
-   fModel = RNTupleModel::CreateBare();
+   fModel = ROOT::RNTupleModel::CreateBare();
    fEntry = nullptr;
 }
 
-ROOT::Experimental::RResult<void> ROOT::Experimental::RNTupleImporter::PrepareSchema()
+ROOT::RResult<void> ROOT::Experimental::RNTupleImporter::PrepareSchema()
 {
    ResetSchema();
 
@@ -201,7 +201,7 @@ ROOT::Experimental::RResult<void> ROOT::Experimental::RNTupleImporter::PrepareSc
 
       std::size_t branchBufferSize = 0; // Size of the memory location into which TTree reads the events' branch data
       // For leaf lists, every leaf translates into a sub field of an untyped RNTuple record
-      std::vector<std::unique_ptr<RFieldBase>> recordItems;
+      std::vector<std::unique_ptr<ROOT::RFieldBase>> recordItems;
       // For leaf count arrays, we expect to find a single leaf; we don't add a field right away but only
       // later through a projection
       bool isLeafCountArray = false;
@@ -241,13 +241,13 @@ ROOT::Experimental::RResult<void> ROOT::Experimental::RNTupleImporter::PrepareSc
          }
 
          RImportField f;
-         auto fieldOrError = RFieldBase::Create(fieldName, fieldType);
+         auto fieldOrError = ROOT::RFieldBase::Create(fieldName, fieldType);
          if (!fieldOrError)
             return R__FORWARD_ERROR(fieldOrError);
          auto field = fieldOrError.Unwrap();
          if (isCString) {
             branchBufferSize = l->GetMaximum();
-            f.fValue = std::make_unique<RFieldBase::RValue>(field->CreateValue());
+            f.fValue = std::make_unique<ROOT::RFieldBase::RValue>(field->CreateValue());
             f.fFieldBuffer = f.fValue->GetPtr<void>().get();
             fImportTransformations.emplace_back(
                std::make_unique<RCStringTransformation>(fImportBranches.size(), fImportFields.size()));
@@ -278,7 +278,7 @@ ROOT::Experimental::RResult<void> ROOT::Experimental::RNTupleImporter::PrepareSc
          }
       }
       if (!recordItems.empty()) {
-         auto recordField = std::make_unique<RRecordField>(b->GetName(), std::move(recordItems));
+         auto recordField = std::make_unique<ROOT::RRecordField>(b->GetName(), std::move(recordItems));
          RImportField f;
          f.fField = recordField.get();
          fImportFields.emplace_back(std::move(f));
@@ -317,15 +317,16 @@ ROOT::Experimental::RResult<void> ROOT::Experimental::RNTupleImporter::PrepareSc
       auto &c = p.second;
 
       c.fFieldName = "_collection" + std::to_string(iLeafCountCollection);
-      auto recordField = std::make_unique<RRecordField>("_0", std::move(c.fLeafFields));
+      auto recordField = std::make_unique<ROOT::RRecordField>("_0", std::move(c.fLeafFields));
       c.fRecordField = recordField.get();
-      auto collectionField = RVectorField::CreateUntyped(c.fFieldName, std::move(recordField));
+      auto collectionField = ROOT::RVectorField::CreateUntyped(c.fFieldName, std::move(recordField));
       fModel->AddField(std::move(collectionField));
 
       // Add projected fields for all leaf count arrays
-      for (const auto leaf : c.fRecordField->GetSubFields()) {
+      for (const auto leaf : c.fRecordField->GetConstSubfields()) {
          const auto name = leaf->GetFieldName();
-         auto projectedField = RFieldBase::Create(name, "ROOT::VecOps::RVec<" + leaf->GetTypeName() + ">").Unwrap();
+         auto projectedField =
+            ROOT::RFieldBase::Create(name, "ROOT::VecOps::RVec<" + leaf->GetTypeName() + ">").Unwrap();
          fModel->AddProjectedField(std::move(projectedField), [&name, &c](const std::string &fieldName) {
             if (fieldName == name)
                return c.fFieldName;
@@ -340,7 +341,7 @@ ROOT::Experimental::RResult<void> ROOT::Experimental::RNTupleImporter::PrepareSc
       }
 
       // Add projected fields for count leaf
-      auto projectedField = RFieldBase::Create(countLeafName, "ROOT::RNTupleCardinality<std::uint32_t>").Unwrap();
+      auto projectedField = ROOT::RFieldBase::Create(countLeafName, "ROOT::RNTupleCardinality<std::uint32_t>").Unwrap();
       fModel->AddProjectedField(std::move(projectedField), [&c](const std::string &) { return c.fFieldName; });
 
       iLeafCountCollection++;
@@ -375,16 +376,16 @@ void ROOT::Experimental::RNTupleImporter::Import()
 
    PrepareSchema();
 
-   std::unique_ptr<Internal::RPageSink> sink =
-      std::make_unique<Internal::RPageSinkFile>(fNTupleName, *fDestFile, fWriteOptions);
+   std::unique_ptr<ROOT::Internal::RPageSink> sink =
+      std::make_unique<ROOT::Internal::RPageSinkFile>(fNTupleName, *fDestFile, fWriteOptions);
    sink->GetMetrics().Enable();
    auto ctrZippedBytes = sink->GetMetrics().GetCounter("RPageSinkFile.szWritePayload");
 
    if (fWriteOptions.GetUseBufferedWrite()) {
-      sink = std::make_unique<Internal::RPageSinkBuf>(std::move(sink));
+      sink = std::make_unique<ROOT::Internal::RPageSinkBuf>(std::move(sink));
    }
 
-   auto ntplWriter = Internal::CreateRNTupleWriter(std::move(fModel), std::move(sink));
+   auto ntplWriter = ROOT::Internal::CreateRNTupleWriter(std::move(fModel), std::move(sink));
    // The guard needs to be destructed before the writer goes out of scope
    RImportGuard importGuard(*this);
 
@@ -403,10 +404,10 @@ void ROOT::Experimental::RNTupleImporter::Import()
          const auto sizeOfRecord = c.fRecordField->GetValueSize();
          c.fFieldBuffer.resize(sizeOfRecord * (*c.fCountVal));
 
-         const auto nLeafs = c.fRecordField->GetSubFields().size();
+         const auto nLeafs = c.fRecordField->GetConstSubfields().size();
          for (std::size_t l = 0; l < nLeafs; ++l) {
             const auto offset = c.fRecordField->GetOffsets()[l];
-            const auto sizeOfLeaf = c.fRecordField->GetSubFields()[l]->GetValueSize();
+            const auto sizeOfLeaf = c.fRecordField->GetConstSubfields()[l]->GetValueSize();
             const auto idxImportBranch = c.fLeafBranchIndexes[l];
             for (Int_t j = 0; j < *c.fCountVal; ++j) {
                memcpy(c.fFieldBuffer.data() + j * sizeOfRecord + offset,

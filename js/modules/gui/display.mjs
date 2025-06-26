@@ -387,13 +387,14 @@ class GridDisplay extends MDIDisplay {
          handle = separ.property('handle'),
          id = separ.property('separator_id'),
          group = handle.groups[id];
-      let needResize = false, needSetSize = false;
 
       if (action === 'start') {
          group.startpos = group.position;
          group.acc_drag = 0;
          return;
       }
+
+      let needResize, needSetSize = false;
 
       if (action === 'end') {
          if (Math.abs(group.startpos - group.position) < 0.5)
@@ -676,11 +677,12 @@ class TabsDisplay extends MDIDisplay {
 
       if (lbl.length > 15) {
          let p = lbl.lastIndexOf('/');
-         if (p === lbl.length-1) p = lbl.lastIndexOf('/', p-1);
+         if (p === lbl.length - 1)
+            p = lbl.lastIndexOf('/', p-1);
          if ((p > 0) && (lbl.length - p < 20) && (lbl.length - p > 1))
             lbl = lbl.slice(p+1);
          else
-            lbl = '...' + lbl.slice(lbl.length-17);
+            lbl = '...' + lbl.slice(lbl.length - 17);
       }
 
       labels.append('span')
@@ -808,15 +810,15 @@ class FlexibleDisplay extends MDIDisplay {
 
       const main = d3_select(frame.parentNode), left = main.style('left'), top = main.style('top');
 
-      return { x: parseInt(left.slice(0, left.length-2)), y: parseInt(top.slice(0, top.length-2)),
+      return { x: parseInt(left.slice(0, left.length - 2)), y: parseInt(top.slice(0, top.length - 2)),
                w: main.node().clientWidth, h: main.node().clientHeight };
    }
 
    /** @summary change frame state */
    changeFrameState(frame, newstate, no_redraw) {
       const main = d3_select(frame.parentNode),
-          state = main.property('state'),
-          top = this.selectDom().select('.jsroot_flex_top');
+            state = main.property('state'),
+            top = this.selectDom().select('.jsroot_flex_top');
 
       if (state === newstate)
          return false;
@@ -857,7 +859,6 @@ class FlexibleDisplay extends MDIDisplay {
       // adjust position of new minified rect
       if (newstate === 'min') {
          const rect = this.getFrameRect(frame),
-               top = this.selectDom().select('.jsroot_flex_top'),
                ww = top.node().clientWidth,
                hh = top.node().clientHeight,
                arr = [], step = 4,
@@ -884,7 +885,6 @@ class FlexibleDisplay extends MDIDisplay {
          main.style('left', rect.x + 'px').style('top', rect.y + 'px');
       } else if (!no_redraw)
          resize(frame);
-
 
       return true;
    }
@@ -967,34 +967,35 @@ class FlexibleDisplay extends MDIDisplay {
 
          if (detectRightButton(evnt.sourceEvent)) return;
 
-         const main = d3_select(this.parentNode);
-         if (!main.classed('jsroot_flex_frame') || (main.property('state') === 'max')) return;
+         const mframe = d3_select(this.parentNode);
+         if (!mframe.classed('jsroot_flex_frame') || (mframe.property('state') === 'max'))
+            return;
 
          doing_move = !d3_select(this).classed('jsroot_flex_resize');
-         if (!doing_move && (main.property('state') === 'min')) return;
+         if (!doing_move && (mframe.property('state') === 'min')) return;
 
-         mdi.activateFrame(main.select('.jsroot_flex_draw').node());
+         mdi.activateFrame(mframe.select('.jsroot_flex_draw').node());
 
-         moving_div = top.append('div').attr('style', main.attr('style')).style('border', '2px dotted #00F');
+         moving_div = top.append('div').attr('style', mframe.attr('style')).style('border', '2px dotted #00F');
 
-         if (main.property('state') === 'min') {
-            moving_div.style('width', main.node().clientWidth + 'px')
-                      .style('height', main.node().clientHeight + 'px');
+         if (mframe.property('state') === 'min') {
+            moving_div.style('width', mframe.node().clientWidth + 'px')
+                      .style('height', mframe.node().clientHeight + 'px');
          }
 
          evnt.sourceEvent.preventDefault();
          evnt.sourceEvent.stopPropagation();
 
-         moving_frame = main;
+         moving_frame = mframe;
          current = [];
-      }).on('drag', function(evnt) {
+      }).on('drag', evnt => {
          if (!moving_div) return;
          evnt.sourceEvent.preventDefault();
          evnt.sourceEvent.stopPropagation();
          const changeProp = (i, name, dd) => {
             if (i >= current.length) {
                const v = moving_div.style(name);
-               current[i] = parseInt(v.slice(0, v.length-2));
+               current[i] = parseInt(v.slice(0, v.length - 2));
             }
             current[i] += dd;
             moving_div.style(name, Math.max(0, current[i])+'px');
@@ -1006,7 +1007,7 @@ class FlexibleDisplay extends MDIDisplay {
             changeProp(0, 'width', evnt.dx);
             changeProp(1, 'height', evnt.dy);
          }
-      }).on('end', function(evnt) {
+      }).on('end', evnt => {
          if (!moving_div) return;
          evnt.sourceEvent.preventDefault();
          evnt.sourceEvent.stopPropagation();
@@ -1530,8 +1531,8 @@ class BrowserLayout {
       if ((hsepar === null) && first_time && !main.select('.jsroot_h_separator').empty()) {
          // if separator set for the first time, check if status line present
          hsepar = main.select('.jsroot_h_separator').style('bottom');
-         if (isStr(hsepar) && (hsepar.length > 2) && (hsepar.indexOf('px') === hsepar.length-2))
-            hsepar = hsepar.slice(0, hsepar.length-2);
+         if (isStr(hsepar) && (hsepar.length > 2) && (hsepar.indexOf('px') === hsepar.length - 2))
+            hsepar = hsepar.slice(0, hsepar.length - 2);
          else
             hsepar = null;
       }
@@ -1735,8 +1736,8 @@ class BrowserLayout {
 
          const drag_move = d3_drag().on('start', () => {
             const sl = area.style('left'), st = area.style('top');
-            this._float_left = parseInt(sl.slice(0, sl.length-2));
-            this._float_top = parseInt(st.slice(0, st.length-2));
+            this._float_left = parseInt(sl.slice(0, sl.length - 2));
+            this._float_top = parseInt(st.slice(0, st.length - 2));
             this._max_left = Math.max(0, main.node().clientWidth - area.node().offsetWidth - 1);
             this._max_top = Math.max(0, main.node().clientHeight - area.node().offsetHeight - 1);
          }).filter(evnt => {
@@ -1751,7 +1752,7 @@ class BrowserLayout {
 
          drag_resize = d3_drag().on('start', () => {
             const sw = area.style('width');
-            this._float_width = parseInt(sw.slice(0, sw.length-2));
+            this._float_width = parseInt(sw.slice(0, sw.length - 2));
             this._float_height = area.node().clientHeight;
             this._max_width = main.node().clientWidth - area.node().offsetLeft - 1;
             this._max_height = main.node().clientHeight - area.node().offsetTop - 1;

@@ -51,6 +51,9 @@ ROOT_STANDARD_LIBRARY_PACKAGE(Event
                               SOURCES Event.cxx LINKDEF EventLinkDef.h
                               DEPENDENCIES Hist MathCore)
 if(MSVC AND NOT CMAKE_GENERATOR MATCHES Ninja)
+  add_custom_command(TARGET Event POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/libEvent.dll
+                                     ${CMAKE_CURRENT_BINARY_DIR}/libEvent.dll)
   if(NOT runtime_cxxmodules)
     add_custom_command(TARGET Event POST_BUILD
       COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/libEvent_rdict.pcm
@@ -168,26 +171,25 @@ if(ROOT_opengl_FOUND)
     configure_file(stressGraphics.ref stressGraphics.ref COPYONLY)
   endif()
   configure_file(stressGraphics_web.ref stressGraphics_web.ref COPYONLY)
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../tutorials/graphics/earth.dat earth.dat COPYONLY)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../tutorials/visualisation/graphics/earth.dat earth.dat COPYONLY)
   ROOT_ADD_TEST(test-stressgraphics
                 ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib:$ENV{LD_LIBRARY_PATH}
-                COMMAND stressGraphics -b -k -p=sge
+                COMMAND stressGraphics -b --web=off -k -p=sge
                 FAILREGEX "FAILED|Error in"
                 LABELS longtest)
   ROOT_ADD_TEST(test-stressgraphics-interpreted
-                COMMAND ${ROOT_root_CMD} -b -q -l ${CMAKE_CURRENT_SOURCE_DIR}/stressGraphics.cxx
+                COMMAND ${ROOT_root_CMD} -b --web=off -q -l ${CMAKE_CURRENT_SOURCE_DIR}/stressGraphics.cxx
                 FAILREGEX "FAILED|Error in"
                 DEPENDS test-stressgraphics)
-  # Disabled until the failures on Fedora 41 are addressed
-  # if(CHROME_EXECUTABLE)
-  #   ROOT_ADD_TEST(test-stressgraphics-chrome
-  #                 RUN_SERIAL
-  #                 ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib:$ENV{LD_LIBRARY_PATH}
-  #                 COMMAND stressGraphics -b -k -p=sgc --web=chrome
-  #                 FAILREGEX "FAILED|Error in"
-  #                 LABELS longtest)
-  # endif()
-  if(FIREFOX_EXECUTABLE AND NOT APPLE)
+  if(CHROME_EXECUTABLE)
+    ROOT_ADD_TEST(test-stressgraphics-chrome
+                  RUN_SERIAL
+                  ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib:$ENV{LD_LIBRARY_PATH}
+                  COMMAND stressGraphics -b -k -p=sgc --web=chrome
+                  FAILREGEX "FAILED|Error in"
+                  LABELS longtest)
+  endif()
+  if(FIREFOX_EXECUTABLE)
     ROOT_ADD_TEST(test-stressgraphics-firefox-skip3d
                   RUN_SERIAL
                   ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/lib:$ENV{LD_LIBRARY_PATH}
@@ -372,43 +374,27 @@ if(TARGET g2root)
 endif()
 
 #--periodic----------------------------------------------------------------------------------------
-if (NOT cxxmodules)
-  # There are two problems with this test and cxxmodules. First, it picks up a
-  # header files from $ROOTSYS/include and builds a library. Naturally, we should
-  # build pcm files, however, building module MathCore requires specific -I to
-  # build the needed VecCore and Vc components. This test does not have access
-  # to the include relevant include paths. Secondly, if we want to reuse the
-  # modules from ROOT which makes most sense we can't because we get a hard
-  # error such as: fatal error: malformed or corrupted AST file:
-  # 'SourceLocation remap refers to unknown module, cannot find include/pcms/1WYSNQV9VBZK7/stl-2OZGQN92C38MI.pcm
-  #
-  # FIXME: We can fix the first point by moving out all VecCore-related headers
-  # such as Math/Types.h and all of its includers in a separate module. Thus,
-  # the current test will not require the VecCore (as in the textual case).
-  # Alternatively, we can trace the origin of the fatal error and try to remap
-  # the source locations.
-  if(MSVC)
-    set(build_generator_args --build-generator ${CMAKE_GENERATOR})
-    if(CMAKE_GENERATOR_PLATFORM)
-      list(APPEND build_generator_args --build-generator-platform ${CMAKE_GENERATOR_PLATFORM})
-    endif()
-    if(CMAKE_GENERATOR_TOOLSET)
-      list(APPEND build_generator_args --build-generator-toolset ${CMAKE_GENERATOR_TOOLSET})
-    endif()
-    ROOT_ADD_TEST(test-periodic-build
-      COMMAND ${CMAKE_CTEST_COMMAND} ${build_generator_args}
-        --build-and-test ${CMAKE_CURRENT_SOURCE_DIR}/periodic periodic-build
-        --build-options -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}
-    )
-  else()
-    ROOT_ADD_TEST(test-periodic-build
-      COMMAND
-        env CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
-        ${CMAKE_CTEST_COMMAND} --build-generator ${CMAKE_GENERATOR}
-        --build-and-test ${CMAKE_CURRENT_SOURCE_DIR}/periodic periodic-build
-        --build-options -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}
-    )
+if(MSVC)
+  set(build_generator_args --build-generator ${CMAKE_GENERATOR})
+  if(CMAKE_GENERATOR_PLATFORM)
+    list(APPEND build_generator_args --build-generator-platform ${CMAKE_GENERATOR_PLATFORM})
   endif()
+  if(CMAKE_GENERATOR_TOOLSET)
+    list(APPEND build_generator_args --build-generator-toolset ${CMAKE_GENERATOR_TOOLSET})
+  endif()
+  ROOT_ADD_TEST(test-periodic-build
+    COMMAND ${CMAKE_CTEST_COMMAND} ${build_generator_args}
+      --build-and-test ${CMAKE_CURRENT_SOURCE_DIR}/periodic periodic-build
+      --build-options -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}
+  )
+else()
+  ROOT_ADD_TEST(test-periodic-build
+    COMMAND
+      env CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER}
+      ${CMAKE_CTEST_COMMAND} --build-generator ${CMAKE_GENERATOR}
+      --build-and-test ${CMAKE_CURRENT_SOURCE_DIR}/periodic periodic-build
+      --build-options -DCMAKE_PREFIX_PATH=${CMAKE_BINARY_DIR}
+  )
 endif()
 
 #--canary tests------------------------------------------------------------------------------------

@@ -14,6 +14,7 @@
 
 #include "TNamed.h"
 
+#include <array>
 #include <vector>
 
 class TArrayI;
@@ -101,7 +102,9 @@ public:
    static void    Pixel2RGB(ULong_t pixel, Int_t &r, Int_t &g, Int_t &b);
    static void    Pixel2RGB(ULong_t pixel, Float_t &r, Float_t &g, Float_t &b);
    static const char *PixelAsHexString(ULong_t pixel);
+   static TString SavePrimitiveColor(Int_t ci);
    static Bool_t  SaveColor(std::ostream &out, Int_t ci);
+   static void    SaveColorsPalette(std::ostream &out);
    static void    SetColorThreshold(Float_t t);
    static Bool_t  DefinedColors(Int_t set_always_on = 0);
    static void    InvertPalette();
@@ -135,5 +138,17 @@ public:
                        kWaterMelon=108,      kCool=109,        kCopper=110,
                        kGistEarth=111,       kViridis=112,     kCividis=113,
                        kRainbow=kRainBow,    kDarkRainbow=kDarkRainBow};
+
+class TColorNumber {
+public:
+   TColorNumber(Int_t color) : fNumber{color} {}
+   TColorNumber(std::string const &color);
+   TColorNumber(std::array<Float_t, 3> rgb);
+   Int_t number() const { return fNumber; }
+
+private:
+   Int_t fNumber; ///< Color number identifier
+};
+
 #endif
 

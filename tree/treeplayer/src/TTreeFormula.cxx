@@ -51,6 +51,7 @@
 #include <cstdlib>
 #include <typeinfo>
 #include <algorithm>
+#include <sstream>
 
 const Int_t kMaxLen     = 2048;
 
@@ -104,6 +105,19 @@ inline static void R__LoadBranch(TBranch* br, Long64_t entry, bool quickLoad)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// \brief Helper function checking if a string contains a literal number.
+/// Whitespaces are not allowed as part of a valid number-string
+/// \return true if it can be converted to a valid number (floating or integer),
+/// false otherwise.
+
+bool IsNumberConstant(const std::string &str)
+{
+   std::istringstream iss(str);
+   double number;
+   return iss >> std::noskipws >> number && iss.eof();
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// \class TDimensionInfo
 /// A small helper class to help in keeping track of the array
 /// dimensions encountered in the analysis of the expression.
@@ -120,13 +134,12 @@ public:
 };
 
 ////////////////////////////////////////////////////////////////////////////////
+/// TreeFormula constructor only valid for ROOT I/O purposes.
 
-TTreeFormula::TTreeFormula(): ROOT::v5::TFormula(), fQuickLoad(false), fNeedLoading(true),
+TTreeFormula::TTreeFormula(TRootIOCtor*): ROOT::v5::TFormula(), fQuickLoad(false), fNeedLoading(true),
    fDidBooleanOptimization(false), fDimensionSetup(nullptr)
 
 {
-   // Tree Formula default constructor
-
    fTree         = nullptr;
    fLookupType   = nullptr;
    fNindex       = 0;
@@ -647,12 +660,12 @@ Int_t TTreeFormula::RegisterDimensions(Int_t code, TLeaf *leaf) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// This method check for treat the case where expression contains $Atl and load up
-/// both fAliases and fExpr.
+/// This method check for treat the case where expression contains `Alt$(`
+/// and load up both fAliases and fExpr. It also checks for `MinIf$(` and `MaxIf$(`
 /// We return:
 /// -  -1 in case of failure
-/// -  0 in case we did not find $Alt
-/// -  the action number in case of success.
+/// -  0 in case we did not find any of `Alt$(`, `MinIf$(`, or `MaxIf$(`
+/// -  the action number in case of success. (kAlternate, kMinIf or kMaxIf)
 
 Int_t TTreeFormula::DefineAlternate(const char *expression)
 {
@@ -2296,9 +2309,10 @@ Int_t TTreeFormula::FindLeafForExpression(const char* expression, TLeaf*& leaf, 
                // Check for an alias.
                if (strlen(left) && left[strlen(left)-1]=='.') left[strlen(left)-1]=0;
                const char *aliasValue = fTree->GetAlias(left);
-               if (aliasValue && strcspn(aliasValue,"+*/-%&!=<>|")==strlen(aliasValue)) {
+               if (aliasValue && strcspn(aliasValue, "()[]+*/-%&!=<>|") == strlen(aliasValue) &&
+                   !IsNumberConstant(aliasValue)) {
                   // First check whether we are using this alias recursively (this would
-                  // lead to an infinite recursion.
+                  // lead to an infinite recursion).
                   if (find(aliasUsed.begin(),
                      aliasUsed.end(),
                      left) != aliasUsed.end()) {
@@ -2629,7 +2643,7 @@ Int_t TTreeFormula::FindLeafForExpression(const char* expression, TLeaf*& leaf, 
 
       // Check for an alias.
       const char *aliasValue = fTree->GetAlias(left);
-      if (aliasValue && strcspn(aliasValue,"()[]+*/-%&!=<>|")==strlen(aliasValue)) {
+      if (aliasValue && strcspn(aliasValue, "()[]+*/-%&!=<>|") == strlen(aliasValue) && !IsNumberConstant(aliasValue)) {
          // First check whether we are using this alias recursively (this would
          // lead to an infinite recursion).
          if (find(aliasUsed.begin(),
@@ -2858,7 +2872,7 @@ Int_t TTreeFormula::DefinedVariable(TString &name, Int_t &action)
       const char *aliasValue = fTree->GetAlias(cname);
       if (aliasValue) {
          // First check whether we are using this alias recursively (this would
-         // lead to an infinite recursion.
+         // lead to an infinite recursion).
          if (find(fAliasesUsed.begin(),
                   fAliasesUsed.end(),
                   cname) != fAliasesUsed.end()) {
@@ -2869,8 +2883,7 @@ Int_t TTreeFormula::DefinedVariable(TString &name, Int_t &action)
             return -3;
          }
 
-
-         if (strcspn(aliasValue,"()+*/-%&!=<>|")!=strlen(aliasValue)) {
+         if (strcspn(aliasValue, "()[]+*/-%&!=<>|") != strlen(aliasValue) || IsNumberConstant(aliasValue)) {
             // If the alias contains an operator, we need to use a nested formula
             // (since DefinedVariable must only add one entry to the operation's list).
 

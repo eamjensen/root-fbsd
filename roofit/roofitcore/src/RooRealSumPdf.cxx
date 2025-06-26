@@ -59,7 +59,6 @@ to the fractions of the various functions. **This requires setting the last argu
 #include <memory>
 #include <stdexcept>
 
-ClassImp(RooRealSumPdf);
 
 bool RooRealSumPdf::_doFloorGlobal = false ;
 
@@ -193,12 +192,27 @@ RooRealSumPdf::RooRealSumPdf(const RooRealSumPdf& other, const char* name) :
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Collect the list of functions to be integrated from the cache
+
+const RooArgList &RooRealSumPdf::funcIntListFromCache(Int_t code, const char *rangeName) const
+{
+   return getCacheElem(*this, _normIntMgr, code, rangeName)->_funcIntList;
+}
+
+const RooArgList &RooRealSumPdf::funcIntListFromCache(RooAbsReal const &caller, RooObjCacheManager &normIntMgr,
+                                                      Int_t code, const char *rangeName)
+{
+   return getCacheElem(caller, normIntMgr, code, rangeName)->_funcIntList;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 RooAbsPdf::ExtendMode RooRealSumPdf::extendMode() const
 {
   return (_extended && (_funcList.size()==_coefList.size())) ? CanBeExtended : CanNotBeExtended ;
 }
 
+////////////////////////////////////////////////////////////////////////////////
 
 double RooRealSumPdf::evaluate(RooAbsReal const& caller,
                                RooArgList const& funcList,
@@ -297,42 +311,6 @@ void RooRealSumPdf::doEval(RooFit::EvalContext & ctx) const
   }
 }
 
-std::string RooRealSumPdf::translateImpl(RooFit::Detail::CodeSquashContext &ctx, RooAbsArg const *klass,
-                                         RooArgList const &funcList, RooArgList const &coefList, bool normalize)
-{
-   bool noLastCoeff = funcList.size() != coefList.size();
-
-   std::string const &funcName = ctx.buildArg(funcList);
-   std::string const &coeffName = ctx.buildArg(coefList);
-   std::string const &coeffSize = std::to_string(coefList.size());
-
-   std::string sum = ctx.getTmpVarName();
-   std::string coeffSum = ctx.getTmpVarName();
-   ctx.addToCodeBody(klass, "double " + sum + " = 0;\ndouble " + coeffSum + "= 0;\n");
-
-   std::string iterator = "i_" + ctx.getTmpVarName();
-   std::string subscriptExpr = "[" + iterator + "]";
-
-   std::string code = "for(int " + iterator + " = 0; " + iterator + " < " + coeffSize + "; " + iterator + "++) {\n" +
-                      sum + " += " + funcName + subscriptExpr + " * " + coeffName + subscriptExpr + ";\n";
-   code += coeffSum + " += " + coeffName + subscriptExpr + ";\n";
-   code += "}\n";
-
-   if (noLastCoeff) {
-      code += sum + " += " + funcName + "[" + coeffSize + "]" + " * (1 - " + coeffSum + ");\n";
-   } else if (normalize) {
-      code += sum + " /= " + coeffSum + ";\n";
-   }
-   ctx.addToCodeBody(klass, code);
-
-   return sum;
-}
-
-void RooRealSumPdf::translate(RooFit::Detail::CodeSquashContext &ctx) const
-{
-   ctx.addResult(this, translateImpl(ctx, this, _funcList, _coefList));
-}
-
 bool RooRealSumPdf::checkObservables(RooAbsReal const& caller, RooArgSet const* nset,
                                      RooArgList const& funcList, RooArgList const& coefList)
 {
@@ -406,7 +384,7 @@ Int_t RooRealSumPdf::getAnalyticalIntegralWN(RooAbsReal const& caller, RooObjCac
   Int_t sterileIdx(-1) ;
   auto* cache = static_cast<CacheElem*>(normIntMgr.getObj(normSet.get(),&analVars,&sterileIdx,RooNameReg::ptr(rangeName)));
   if (cache) {
-    //cout << "RooRealSumPdf("<<this<<")::getAnalyticalIntegralWN:"<<GetName()<<"("<<allVars<<","<<analVars<<","<<(normSet2?*normSet2:RooArgSet())<<","<<(rangeName?rangeName:"<none>") << " -> " << _normIntMgr.lastIndex()+1 << " (cached)" << endl;
+    //cout << "RooRealSumPdf("<<this<<")::getAnalyticalIntegralWN:"<<GetName()<<"("<<allVars<<","<<analVars<<","<<(normSet2?*normSet2:RooArgSet())<<","<<(rangeName?rangeName:"<none>") << " -> " << _normIntMgr.lastIndex()+1 << " (cached)" << std::endl;
     return normIntMgr.lastIndex()+1 ;
   }
 
@@ -428,12 +406,35 @@ Int_t RooRealSumPdf::getAnalyticalIntegralWN(RooAbsReal const& caller, RooObjCac
   // Store cache element
   Int_t code = normIntMgr.setObj(normSet.get(),&analVars,(RooAbsCacheElement*)cache,RooNameReg::ptr(rangeName)) ;
 
-  //cout << "RooRealSumPdf("<<this<<")::getAnalyticalIntegralWN:"<<GetName()<<"("<<allVars<<","<<analVars<<","<<(normSet2?*normSet2:RooArgSet())<<","<<(rangeName?rangeName:"<none>") << " -> " << code+1 << endl;
+  //cout << "RooRealSumPdf("<<this<<")::getAnalyticalIntegralWN:"<<GetName()<<"("<<allVars<<","<<analVars<<","<<(normSet2?*normSet2:RooArgSet())<<","<<(rangeName?rangeName:"<none>") << " -> " << code+1 << std::endl;
   return code+1 ;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// Collect cache elements for given code to use in codegen
 
+const RooRealSumPdf::CacheElem *
+RooRealSumPdf::getCacheElem(RooAbsReal const &caller, RooObjCacheManager &normIntMgr, Int_t code, const char *rangeName)
+{
+   // WVE needs adaptation for rangeName feature
+   auto *cache = static_cast<CacheElem *>(normIntMgr.getObjByIndex(code - 1));
+   if (cache == nullptr) { // revive the (sterilized) cache
+      // std::cout <<
+      // "RooRealSumPdf("<<this<<")::analyticalIntegralWN:"<<GetName()<<"("<<code<<","<<(normSet2?*normSet2:RooArgSet())<<","<<(rangeName?rangeName:"<none>")
+      // << ": reviving cache "<< std::endl;
+      RooArgSet vars;
+      caller.getParameters(nullptr, vars);
+      RooArgSet iset = normIntMgr.selectFromSet2(vars, code - 1);
+      RooArgSet nset = normIntMgr.selectFromSet1(vars, code - 1);
+      RooArgSet dummy;
+      Int_t code2 = caller.getAnalyticalIntegralWN(iset, dummy, &nset, rangeName);
+      R__ASSERT(code == code2); // must have revived the right (sterilized) slot...
+      cache = static_cast<CacheElem *>(normIntMgr.getObjByIndex(code - 1));
+      R__ASSERT(cache != nullptr);
+   }
 
+   return cache;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Implement analytical integrations by deferring integration of component
@@ -452,21 +453,8 @@ double RooRealSumPdf::analyticalIntegralWN(RooAbsReal const& caller, RooObjCache
   // Handle trivial passthrough scenario
   if (code==0) return caller.getVal(normSet2) ;
 
-
-  // WVE needs adaptation for rangeName feature
-  auto* cache = static_cast<CacheElem*>(normIntMgr.getObjByIndex(code-1));
-  if (cache==nullptr) { // revive the (sterilized) cache
-    //cout << "RooRealSumPdf("<<this<<")::analyticalIntegralWN:"<<GetName()<<"("<<code<<","<<(normSet2?*normSet2:RooArgSet())<<","<<(rangeName?rangeName:"<none>") << ": reviving cache "<< endl;
-    RooArgSet vars;
-    caller.getParameters(nullptr, vars);
-    RooArgSet iset = normIntMgr.selectFromSet2(vars, code-1);
-    RooArgSet nset = normIntMgr.selectFromSet1(vars, code-1);
-    RooArgSet dummy;
-    Int_t code2 = caller.getAnalyticalIntegralWN(iset,dummy,&nset,rangeName);
-    R__ASSERT(code==code2); // must have revived the right (sterilized) slot...
-    cache = static_cast<CacheElem*>(normIntMgr.getObjByIndex(code-1)) ;
-    R__ASSERT(cache!=nullptr);
-  }
+  // Retrieve cache element
+  const CacheElem *cache = getCacheElem(caller, normIntMgr, code, rangeName);
 
   double value(0) ;
 

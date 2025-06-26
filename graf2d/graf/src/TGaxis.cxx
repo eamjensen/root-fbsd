@@ -98,7 +98,7 @@ Where:
 The example below generates various kind of axis.
 
 Begin_Macro(source)
-../../../tutorials/graphics/gaxis.C
+../../../tutorials/visualisation/graphics/gaxis.C
 End_Macro
 
 \anchor GA01
@@ -314,7 +314,7 @@ only with histograms because the labels'definition is stored in `TAxis`.
 The following example demonstrates how to create such labels.
 
 Begin_Macro(source)
-../../../tutorials/hist/hlabels2.C
+../../../tutorials/hist/hist036_TH2_labels.C
 End_Macro
 
 Because the alphanumeric labels are usually longer that the numeric labels, their
@@ -675,7 +675,7 @@ and `localtime` give with what gives `TGaxis`. It can be used
 as referenced test to check if the time option of `TGaxis` is working properly.
 
 Begin_Macro(source)
-../../../tutorials/graphs/timeonaxis3.C
+../../../tutorials/visualisation/graphics/timeonaxis3.C
 End_Macro
 
 
@@ -683,7 +683,7 @@ The following macro illustrates the use, with histograms axis, of the time mode 
 with different time intervals and time formats.
 
 Begin_Macro(source)
-../../../tutorials/graphs/timeonaxis.C
+../../../tutorials/hist/hist061_TH1_timeonaxis.C
 End_Macro
 
 */
@@ -2552,76 +2552,51 @@ void TGaxis::Rotate(Double_t X,  Double_t Y,  Double_t CFI, Double_t SFI
 ////////////////////////////////////////////////////////////////////////////////
 /// Save primitive as a C++ statement(s) on output stream out
 
-void TGaxis::SavePrimitive(std::ostream &out, Option_t * /*= ""*/)
+void TGaxis::SavePrimitive(std::ostream &out, Option_t *option)
 {
-   char quote = '"';
-   if (gROOT->ClassSaved(TGaxis::Class())) {
-      out<<"   ";
-   } else {
-      out<<"   TGaxis *";
-   }
-   out<<"gaxis = new TGaxis("<<fX1<<","<<fY1<<","<<fX2<<","<<fY2
-      <<","<<fWmin<<","<<fWmax<<","<<fNdiv<<","<<quote<<fChopt.Data()<<quote<<");"<<std::endl;
-   out<<"   gaxis->SetLabelOffset("<<GetLabelOffset()<<");"<<std::endl;
-   out<<"   gaxis->SetLabelSize("<<GetLabelSize()<<");"<<std::endl;
-   out<<"   gaxis->SetTickSize("<<GetTickSize()<<");"<<std::endl;
-   out<<"   gaxis->SetGridLength("<<GetGridLength()<<");"<<std::endl;
-   out<<"   gaxis->SetTitleOffset("<<GetTitleOffset()<<");"<<std::endl;
-   out<<"   gaxis->SetTitleSize("<<GetTitleSize()<<");"<<std::endl;
-   out<<"   gaxis->SetTitleColor("<<GetTextColor()<<");"<<std::endl;
-   out<<"   gaxis->SetTitleFont("<<GetTextFont()<<");"<<std::endl;
+   SavePrimitiveConstructor(out, Class(), "gaxis",
+                            TString::Format("%g, %g, %g, %g, %14.12g, %14.12g, %d, \"%s\", %g", fX1, fY1, fX2, fY2,
+                                            fWmin, fWmax, fNdiv, fChopt.Data(), GetGridLength()));
 
-   if (strlen(GetName())) {
-      out<<"   gaxis->SetName("<<quote<<GetName()<<quote<<");"<<std::endl;
-   }
-   if (strlen(GetTitle())) {
-      out<<"   gaxis->SetTitle("<<quote<<GetTitle()<<quote<<");"<<std::endl;
-   }
+   SaveLineAttributes(out, "gaxis", 1, 1, 1);
+   SaveTextAttributes(out, "gaxis", 11, 0, 1, 62, 0.04);
 
-   if (fLabelColor != 1) {
-      if (TColor::SaveColor(out, fLabelColor))
-         out<<"   gaxis->SetLabelColor(ci);" << std::endl;
-      else
-         out<<"   gaxis->SetLabelColor("<<GetLabelColor()<<");"<<std::endl;
-   }
-   if (fLineColor != 1) {
-      if (TColor::SaveColor(out, fLineColor))
-         out<<"   gaxis->SetLineColor(ci);" << std::endl;
-      else
-         out<<"   gaxis->SetLineColor("<<GetLineColor()<<");"<<std::endl;
-   }
-   if (fLineStyle != 1) {
-      out<<"   gaxis->SetLineStyle("<<GetLineStyle()<<");"<<std::endl;
-   }
-   if (fLineWidth != 1) {
-      out<<"   gaxis->SetLineWidth("<<GetLineWidth()<<");"<<std::endl;
-   }
-   if (fLabelFont != 62) {
-      out<<"   gaxis->SetLabelFont("<<GetLabelFont()<<");"<<std::endl;
-   }
-   if (TestBit(TAxis::kMoreLogLabels)) {
-      out<<"   gaxis->SetMoreLogLabels();"<<std::endl;
-   }
-   if (TestBit(TAxis::kNoExponent)) {
-      out<<"   gaxis->SetNoExponent();"<<std::endl;
-   }
+   if (strlen(GetName()))
+      out << "   gaxis->SetName(\"" << GetName() << "\");\n";
+   if (strlen(GetTitle()))
+      out << "   gaxis->SetTitle(\"" << TString(GetTitle()).ReplaceSpecialCppChars() << "\");\n";
+   if (fTimeFormat.Length() > 0)
+      out << "   gaxis->SetTimeFormat(\"" << TString(fTimeFormat).ReplaceSpecialCppChars() << "\");\n";
+
+   out << "   gaxis->SetLabelOffset(" << GetLabelOffset() << ");\n";
+   out << "   gaxis->SetLabelSize(" << GetLabelSize() << ");\n";
+   if (fLabelColor != 1)
+      out << "   gaxis->SetLabelColor(" << TColor::SavePrimitiveColor(GetLabelColor()) << ");\n";
+   if (fLabelFont != 62)
+      out << "   gaxis->SetLabelFont(" << GetLabelFont() << ");\n";
+   if (TestBit(TAxis::kMoreLogLabels))
+      out << "   gaxis->SetMoreLogLabels();\n";
+
+   out << "   gaxis->SetTickSize(" << GetTickSize() << ");\n";
+   out << "   gaxis->SetTitleOffset(" << GetTitleOffset() << ");\n";
+   out << "   gaxis->SetTitleSize(" << GetTitleSize() << ");\n";
+
+   if (TestBit(TAxis::kNoExponent))
+      out << "   gaxis->SetNoExponent();\n";
    if (fModLabs) {
       TIter next(fModLabs);
-      while (auto ml = (TAxisModLab*)next()) {
+      while (auto ml = static_cast<TAxisModLab *>(next())) {
          if (ml->GetLabNum() == 0)
-            out<<"   gaxis->ChangeLabelByValue("<<ml->GetLabValue()<<",";
+            out << "   gaxis->ChangeLabelByValue(" << ml->GetLabValue();
          else
-            out<<"   gaxis->ChangeLabel("<<ml->GetLabNum()<<",";
-         out<<ml->GetAngle()<<","
-            <<ml->GetSize()<<","
-            <<ml->GetAlign()<<","
-            <<ml->GetColor()<<","
-            <<ml->GetFont()<<","
-            <<quote<<ml->GetText()<<quote<<");"<<std::endl;
+            out << "   gaxis->ChangeLabel(" << ml->GetLabNum();
+         out << ", " << ml->GetAngle() << ", " << ml->GetSize() << ", " << ml->GetAlign() << ", "
+             << TColor::SavePrimitiveColor(ml->GetColor()) << ", " << ml->GetFont() << ", \""
+             << TString(ml->GetText()).ReplaceSpecialCppChars() << "\");\n";
       }
    }
 
-   out<<"   gaxis->Draw();"<<std::endl;
+   SavePrimitiveDraw(out, "gaxis", option);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3079,4 +3054,9 @@ void TGaxis::Streamer(TBuffer &R__b)
    } else {
       R__b.WriteClassBuffer(TGaxis::Class(),this);
    }
+}
+
+void TGaxis::SetLabelColor(TColorNumber lcolor)
+{
+   SetLineColor(lcolor.number());
 }

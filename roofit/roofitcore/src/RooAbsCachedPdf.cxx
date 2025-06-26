@@ -35,7 +35,6 @@ for changes to trigger a refilling of the cache histogram.
 #include "RooExpensiveObjectCache.h"
 #include "RooFit/Detail/RooNormalizedPdf.h"
 
-ClassImp(RooAbsCachedPdf);
 
 
 
@@ -187,7 +186,7 @@ RooAbsCachedPdf::PdfCacheElem::PdfCacheElem(const RooAbsCachedPdf& self, const R
   _hist->removeSelfFromDir() ;
 
   //RooArgSet* observables= self.getObservables(orderedObs) ;
-  // cout << "orderedObs = " << orderedObs << " observables = " << *observables << std::endl ;
+  // std::cout << "orderedObs = " << orderedObs << " observables = " << *observables << std::endl ;
 
   // Get set of p.d.f. observable corresponding to set of histogram observables
   RooArgSet pdfObs ;
@@ -377,6 +376,13 @@ double RooAbsCachedPdf::analyticalIntegralWN(int code, const RooArgSet* normSet,
 {
   if (code==0) {
     return getVal(normSet) ;
+  }
+  if (code < 0 || (code-1) >= static_cast<int>(_anaReg.size())) {
+    coutE(Integration) << "RooAbsCachedPdf::analyticalIntegralWN(" << GetName()
+    << "): analytical integration registry is empty for code: " << code << "."
+    << " RooWorkspace is not prepared to store integrals to functions when these inherit from RooAbsCachedPdf."
+    << std::endl;
+    return 0.;
   }
 
   RooArgSet *allVars(nullptr);

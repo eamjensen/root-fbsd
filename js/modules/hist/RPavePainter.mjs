@@ -1,5 +1,5 @@
 import { settings, isFunc, isStr, gStyle, nsREX } from '../core.mjs';
-import { floatToString, makeTranslate } from '../base/BasePainter.mjs';
+import { makeTranslate } from '../base/BasePainter.mjs';
 import { RObjectPainter } from '../base/RObjectPainter.mjs';
 import { ensureRCanvas } from '../gpad/RCanvasPainter.mjs';
 import { addDragHandler } from '../gpad/TFramePainter.mjs';
@@ -105,7 +105,7 @@ class RPavePainter extends RObjectPainter {
             rect = this.getPadPainter().getPadRect(),
             fr = this.onFrame ? this.getFramePainter().getFrameRect() : rect,
             changes = {};
-      let offsetx = 0, offsety = 0;
+      let offsetx, offsety;
 
       switch (this.corner) {
          case ECorner.kTopLeft:
@@ -328,25 +328,6 @@ class RHistStatsPainter extends RPavePainter {
       return (this.stats_lines !== undefined);
    }
 
-   /** @summary format float value as string
-     * @private */
-   format(value, fmt) {
-      if (!fmt) fmt = 'stat';
-
-      switch (fmt) {
-         case 'stat' : fmt = gStyle.fStatFormat; break;
-         case 'fit': fmt = gStyle.fFitFormat; break;
-         case 'entries': if ((Math.abs(value) < 1e9) && (Math.round(value) === value)) return value.toFixed(0); fmt = '14.7g'; break;
-         case 'last': fmt = this.lastformat; break;
-      }
-
-      const res = floatToString(value, fmt || '6.4g', true);
-
-      this.lastformat = res[1];
-
-      return res[0];
-   }
-
    /** @summary Draw content */
    async drawContent() {
       if (this.fillStatistic())
@@ -357,11 +338,11 @@ class RHistStatsPainter extends RPavePainter {
 
    /** @summary Change mask */
    changeMask(nbit) {
-      const obj = this.getObject(), mask = (1<<nbit);
+      const obj = this.getObject(), mask = 1 << nbit;
       if (obj.fShowMask & mask)
-         obj.fShowMask = obj.fShowMask & ~mask;
+         obj.fShowMask &= ~mask;
       else
-         obj.fShowMask = obj.fShowMask | mask;
+         obj.fShowMask |= mask;
 
       if (this.fillStatistic())
          this.drawStatistic(this.stats_lines);

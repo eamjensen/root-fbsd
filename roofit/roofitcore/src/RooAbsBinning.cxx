@@ -35,7 +35,6 @@ This class defines the interface to retrieve bin boundaries, ranges etc.
 
 using std::ostream;
 
-ClassImp(RooAbsBinning);
 
 
 
@@ -138,7 +137,7 @@ void RooAbsBinning::Streamer(TBuffer &R__b)
    }
 }
 
-std::string RooAbsBinning::translateBinNumber(RooFit::Detail::CodeSquashContext &, RooAbsArg const &, int) const
+std::string RooAbsBinning::translateBinNumber(RooFit::Experimental::CodegenContext &, RooAbsArg const &, int) const
 {
    oocoutE(nullptr, InputArguments) << "This binning doesn't support codegen!" << std::endl;
    return "";

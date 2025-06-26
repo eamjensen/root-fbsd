@@ -30,19 +30,6 @@ as a MIGRAD minimization step is executed for each function evaluation
 #include "RooMsgService.h"
 #include "RooRealVar.h"
 
-ClassImp(RooProfileLL);
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// Default constructor
-/// Should only be used by proof.
-
-RooProfileLL::RooProfileLL()
-   : RooAbsReal("RooProfileLL", "RooProfileLL"),
-     _obs("paramOfInterest", "Parameters of interest", this),
-     _par("nuisanceParam", "Nuisance parameters", this, false, false)
-{
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -70,9 +57,9 @@ RooProfileLL::RooProfileLL(const char *name, const char *title,
 
 RooProfileLL::RooProfileLL(const RooProfileLL &other, const char *name)
    : RooAbsReal(other, name),
-     _nll("nll", this, other._nll),
-     _obs("obs", this, other._obs),
-     _par("par", this, other._par),
+     _nll("input", this, other._nll),
+     _obs(this, other._obs),
+     _par(this, other._par),
      _startFromMin(other._startFromMin),
      _paramFixed(other._paramFixed)
 {

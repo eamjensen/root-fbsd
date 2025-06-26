@@ -98,13 +98,13 @@ class FontHandler {
          this.scaled = true;
       }
 
-      this.size = Math.round(size || 11);
+      this.size = Math.round(size);
       this.scale = scale;
       this.index = 0;
 
       this.func = this.setFont.bind(this);
 
-      let cfg = null;
+      let cfg;
 
       if (fontIndex && isObject(fontIndex))
          cfg = fontIndex;
@@ -133,7 +133,7 @@ class FontHandler {
       return loadFontFile(this.cfg.file).then(base64 => {
          this.cfg.base64 = this.base64 = base64;
          this.format = 'ttf';
-         return !!base64;
+         return Boolean(base64);
       });
    }
 

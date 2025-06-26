@@ -39,11 +39,6 @@ class TCanvasPainter extends TPadPainter {
       super(dom, canvas, true);
       this._websocket = null;
       this.tooltip_allowed = settings.Tooltip;
-      if ((dom === null) && (canvas === null)) {
-         // for web canvas details are important
-         settings.SmallPad.width = 20;
-         settings.SmallPad.height = 10;
-      }
    }
 
    /** @summary Cleanup canvas painter */
@@ -347,7 +342,7 @@ class TCanvasPainter extends TPadPainter {
    /** @summary Handle websocket messages
      * @private */
    onWebsocketMsg(handle, msg) {
-      // console.log(`GET MSG len:${msg.length} ${msg.slice(0,60)}`);
+      // console.log(`GET len:${msg.length} msg:${msg.slice(0,60)}`);
 
       if (msg === 'CLOSE') {
          this.onWebsocketClosed();
@@ -615,7 +610,7 @@ class TCanvasPainter extends TPadPainter {
       switch (that) {
          case 'Menu': break;
          case 'StatusBar': this.activateStatusBar(on); break;
-         case 'Editor': return this.activateGed(this, null, !!on);
+         case 'Editor': return this.activateGed(this, null, on);
          case 'ToolBar': break;
          case 'ToolTips': this.setTooltipAllowed(on); break;
       }
@@ -813,9 +808,7 @@ class TCanvasPainter extends TPadPainter {
                axes.push({ axis, f: axis.fFirst, l: axis.fLast, b: axis.fBits });
                axis.fFirst = main.getSelectIndex(name, 'left', 1);
                axis.fLast = main.getSelectIndex(name, 'right');
-               const has_range = (axis.fFirst > 0) || (axis.fLast < axis.fNbins);
-               if (has_range !== axis.TestBit(EAxisBits.kAxisRange))
-                  axis.InvertBit(EAxisBits.kAxisRange);
+               axis.SetBit(EAxisBits.kAxisRange, (axis.fFirst > 0) || (axis.fLast < axis.fNbins));
             }
          };
 
@@ -870,8 +863,8 @@ class TCanvasPainter extends TPadPainter {
       if (!fullW || !fullH || this.isBatchMode() || this.embed_canvas || this.batch_mode)
          return;
 
-      // workaround for qt5-based display where inner window size is used
-      if ((browser.qt5 || browser.qt6) && fullW > 100 && fullH > 60) {
+      // workaround for qt-based display where inner window size is used
+      if (browser.qt6 && fullW > 100 && fullH > 60) {
          fullW -= 3;
          fullH -= 30;
       }
@@ -889,7 +882,7 @@ class TCanvasPainter extends TPadPainter {
 
       if (!nocanvas && can.fCw && can.fCh) {
          const d = painter.selectDom();
-         let apply_size = false;
+         let apply_size;
          if (!painter.isBatchMode()) {
             const rect0 = d.node().getBoundingClientRect();
             apply_size = !rect0.height && (rect0.width > 0.1*can.fCw);

@@ -61,14 +61,18 @@ using namespace cling;
 
 namespace {
   static constexpr unsigned CxxStdCompiledWith() {
+    // The value of __cplusplus in GCC < 14 is 202100L when -std=c++2b or
+    // -std=c++23 is specified, thus we relax the check to 202100L.
+#if __cplusplus >= 202100L
+    return 23;
+#elif __cplusplus >  201703L
+    return 20;
+#elif __cplusplus > 201402L
+    return 17;
     // The value of __cplusplus in GCC < 5.0 (e.g. 4.9.3) when
     // either -std=c++1y or -std=c++14 is specified is 201300L, which fails
     // the test for C++14 or more (201402L) as previously specified.
     // I would claim that the check should be relaxed to:
-#if __cplusplus >  201703L
-    return 20;
-#elif __cplusplus > 201402L
-    return 17;
 #elif __cplusplus > 201103L || (defined(_WIN32) && _MSC_VER >= 1900)
     return 14;
 #elif __cplusplus >= 201103L
@@ -576,7 +580,9 @@ namespace {
 
     // We can't use "assert.h" because it is defined in the resource dir, too.
 #ifdef _WIN32
+    #ifdef CLING_SUPPORT_VC
     llvm::SmallString<256> vcIncLoc(getIncludePathForHeader(HS, "vcruntime.h"));
+    #endif
     llvm::SmallString<256> servIncLoc(getIncludePathForHeader(HS, "windows.h"));
 #endif
     llvm::SmallString<128> cIncLoc(getIncludePathForHeader(HS, "time.h"));
@@ -589,7 +595,9 @@ namespace {
     llvm::SmallString<256> boostIncLoc(getIncludePathForHeader(HS, "boost/version.hpp"));
     llvm::SmallString<256> tinyxml2IncLoc(getIncludePathForHeader(HS, "tinyxml2.h"));
     llvm::SmallString<256> cudaIncLoc(getIncludePathForHeader(HS, "cuda.h"));
+    #ifdef CLING_SUPPORT_VC
     llvm::SmallString<256> vcVcIncLoc(getIncludePathForHeader(HS, "Vc/Vc"));
+    #endif
     llvm::SmallString<256> clingIncLoc(getIncludePathForHeader(HS,
                                         "cling/Interpreter/RuntimeUniverse.h"));
 
@@ -675,10 +683,12 @@ namespace {
     std::string MOverlay;
 
 #ifdef _WIN32
+    #ifdef CLING_SUPPORT_VC
     maybeAppendOverlayEntry(vcIncLoc.str(), "vcruntime.modulemap",
                             clingIncLoc.str().str(), MOverlay,
                             /*RegisterModuleMap=*/ true,
                             /*AllowModulemapOverride=*/ false);
+    #endif
     maybeAppendOverlayEntry(servIncLoc.str(), "services_msvc.modulemap",
                             clingIncLoc.str().str(), MOverlay,
                             /*RegisterModuleMap=*/ true,
@@ -698,6 +708,12 @@ namespace {
                                 clingIncLoc.str().str(), MOverlay,
                                 /*RegisterModuleMap=*/ true,
                                 /*AllowModulemapOverride=*/ false);
+      } else if (CI.getTarget().getSDKVersion() < VersionTuple(15, 4)) {
+        maybeAppendOverlayEntry(stdIncLoc.str(),
+                                "std_darwin.MacOSX15.2.sdk.modulemap",
+                                clingIncLoc.str().str(), MOverlay,
+                                /*RegisterModuleMap=*/true,
+                                /*AllowModulemapOverride=*/false);
       } else {
         maybeAppendOverlayEntry(stdIncLoc.str(), "std_darwin.modulemap",
                                 clingIncLoc.str().str(), MOverlay,
@@ -726,11 +742,13 @@ namespace {
                               clingIncLoc.str().str(), MOverlay,
                               /*RegisterModuleMap=*/ true,
                               /*AllowModulemapOverride=*/ false);
+    #ifdef CLING_SUPPORT_VC
     if (!vcVcIncLoc.empty())
       maybeAppendOverlayEntry(vcVcIncLoc.str(), "vc.modulemap",
                               clingIncLoc.str().str(), MOverlay,
                               /*RegisterModuleMap=*/ true,
                               /*AllowModulemapOverride=*/ false);
+    #endif
     if (!boostIncLoc.empty()) {
       // Add the modulemap in the include/boost folder not in include.
       llvm::sys::path::append(boostIncLoc, "boost");
@@ -941,6 +959,8 @@ namespace {
     // Sanity check that clang delivered the language standard requested
     if (CompilerOpts.DefaultLanguage(&LangOpts)) {
       switch (CxxStdCompiledWith()) {
+        case 23: assert(LangOpts.CPlusPlus23 && "Language version mismatch");
+          LLVM_FALLTHROUGH;
         case 20: assert(LangOpts.CPlusPlus20 && "Language version mismatch");
           LLVM_FALLTHROUGH;
         case 17: assert(LangOpts.CPlusPlus17 && "Language version mismatch");
@@ -1343,6 +1363,7 @@ namespace {
       // and by enforcing the std version now cling is telling clang what to
       // do, rather than after clang has dedcuded a default.
       switch (CxxStdCompiledWith()) {
+        case 23: argvCompile.emplace_back("-std=c++23"); break;
         case 20: argvCompile.emplace_back("-std=c++20"); break;
         case 17: argvCompile.emplace_back("-std=c++17"); break;
         case 14: argvCompile.emplace_back("-std=c++14"); break;
