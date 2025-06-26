@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-pjail="141amd64"
+pjail="143amd64"
 pbranch="quarterly"
-pport="quarterly"
+pport="2025Q2"
 pproj="devel/root"
 
 mkfile="/usr/local/poudriere/ports/${pport}/${pproj}/Makefile"
@@ -11,22 +11,23 @@ pddata="/usr/local/poudriere/data"
 pdcmd="poudriere testport -b ${pbranch} -j ${pjail} -o ${pproj} -p ${pport} -vv"
 
 
+ALL_OPTS="EMPTY $(gawk '$1 == "OPTIONS_DEFINE=" {
+                   for (i = 2; i <= NF; i++) {
+                     if (i == NF) x=$i
+                     else printf $i " "
+                   }
+                   while (x == "\\") {
+                     getline
+                     for (i = 1; i <= NF; i++) {
+                       if (i == NF) x=$i
+                       if ($i != "\\") printf $i " "
+                     }
+                   }
+                 }' $mkfile)"
 
 if [[ $# -eq 0 ]] ; then
   echo "Testing with each individual port option (EMPTY implies all options disabled)."
-  OPTS="EMPTY $(gawk '$1 == "OPTIONS_DEFINE=" {
-                 for (i = 2; i <= NF; i++) {
-                   if (i == NF) x=$i
-                   else printf $i " "
-                 }
-                 while (x == "\\") {
-                   getline
-                   for (i = 1; i <= NF; i++) {
-                     if (i == NF) x=$i
-                     if ($i != "\\") printf $i " "
-                   }
-                 }
-               }' $mkfile)"
+  OPTS="$ALL_OPTS"
 elif [[ $1 = "default" ]] ; then
   _default=1
   echo "Testing with default port options (one go)."
@@ -67,7 +68,7 @@ for opt in $OPTS ; do
   sudo mkdir -p $optdir
   sudo rm -f $optfile ; sudo touch $optfile ; sudo chmod g+w $optfile
 
-  for other_opt in $OPTS ; do
+  for other_opt in $ALL_OPTS ; do
     if [ "$other_opt" == "$opt" ] ; then
       sudo echo "OPTIONS_FILE_SET+=$other_opt" >> $optdir/options
     else

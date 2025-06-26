@@ -54,7 +54,7 @@ endmacro()
 # stop the configuration with a FATAL_ERROR in case of fail-on-missing=ON.
 #----------------------------------------------------------------------------
 macro(ROOT_CHECK_CONNECTION_AND_DISABLE_OPTION option_name)
-  ROOT_CHECK_CONNECTION("$(option_name)=OFF")
+  ROOT_CHECK_CONNECTION("${option_name}=OFF")
   if(NO_CONNECTION)
     message(STATUS "No internet connection, disabling '${option_name}' option")
     set(${option_name} OFF CACHE BOOL "Disabled because there is no internet connection" FORCE)
@@ -110,7 +110,7 @@ endif()
 if(NOT builtin_zlib)
   message(STATUS "Looking for ZLib")
   # Clear cache variables, or LLVM may use old values for ZLIB
-  foreach(suffix FOUND INCLUDE_DIR LIBRARY LIBRARY_DEBUG LIBRARY_RELEASE)
+  foreach(suffix FOUND INCLUDE_DIR LIBRARY LIBRARY_DEBUG LIBRARY_RELEASE CF)
     unset(ZLIB_${suffix} CACHE)
   endforeach()
   if(fail-on-missing)
@@ -209,9 +209,11 @@ if(builtin_freetype)
       INSTALL_DIR ${CMAKE_BINARY_DIR}
       CMAKE_ARGS -G ${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                  -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} -DFT_DISABLE_BZIP2=TRUE
+                 -DCMAKE_POLICY_VERSION_MINIMUM=3.5
       BUILD_COMMAND ${CMAKE_COMMAND} --build . ${FREETYPE_EXTRA_BUILD_ARGS}
       INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different ${FREETYPE_LIB_DIR}/${freetypelib} ${FREETYPE_LIBRARY}
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 BUILD_IN_SOURCE 0
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
+      BUILD_IN_SOURCE 0
       BUILD_BYPRODUCTS ${FREETYPE_LIBRARY}
       TIMEOUT 600
     )
@@ -234,7 +236,8 @@ if(builtin_freetype)
                          --with-harfbuzz=no ${_freetype_brotli} ${_freetype_zlib}
                           "CC=${_freetype_cc}" CFLAGS=${_freetype_cflags}
       INSTALL_COMMAND ""
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 BUILD_IN_SOURCE 1
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
+      BUILD_IN_SOURCE 1
       BUILD_BYPRODUCTS ${FREETYPE_LIBRARY}
       TIMEOUT 600
     )
@@ -292,28 +295,25 @@ if(builtin_lzma)
   set(LZMA_TARGET LZMA)
   message(STATUS "Building LZMA version ${lzma_version} included in ROOT itself")
   if(WIN32)
-    set(LIBLZMA_LIBRARIES ${CMAKE_BINARY_DIR}/LZMA/src/LZMA/lib/liblzma.lib)
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-      set(LZMA_URL ${CMAKE_SOURCE_DIR}/core/lzma/src/xz-${lzma_version}-win64.tar.gz)
-      set(LZMA_URL_HASH SHA256=76ba7cdff547141f6d6810c8600a9d782feca343debde378fc8f6a307cbfd1d2)
-    else()
-      set(LZMA_URL ${CMAKE_SOURCE_DIR}/core/lzma/src/xz-${lzma_version}-win32.tar.gz)
-      set(LZMA_URL_HASH SHA256=a923ee68d836de5492d8de0fec467b9536f2543c8579ca11f4b5e6f46a8cda8c)
-    endif()
+    set(lzma_version 5.6.3)
+    set(LIBLZMA_LIBRARIES ${CMAKE_BINARY_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}lzma${CMAKE_STATIC_LIBRARY_SUFFIX})
     ExternalProject_Add(
       LZMA
-      URL ${LZMA_URL}
-      URL_HASH ${LZMA_URL_HASH}
-      PREFIX LZMA
+      URL ${CMAKE_SOURCE_DIR}/core/lzma/src/xz-${lzma_version}.tar.gz
+      URL_HASH SHA256=b1d45295d3f71f25a4c9101bd7c8d16cb56348bbef3bbc738da0351e17c73317
       INSTALL_DIR ${CMAKE_BINARY_DIR}
-      CONFIGURE_COMMAND ""
-      BUILD_COMMAND ""
-      INSTALL_COMMAND ""
-      LOG_DOWNLOAD 1
+      CMAKE_ARGS -G ${CMAKE_GENERATOR} -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}
+                 -DCMAKE_CXX_FLAGS_RELWITHDEBINFO=${CMAKE_CXX_FLAGS_RELWITHDEBINFO}
+                 -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
+                 -DCMAKE_CXX_FLAGS_DEBUG=${CMAKE_CXX_FLAGS_DEBUG}
+      BUILD_COMMAND ${CMAKE_COMMAND} --build . --config $<CONFIG> --target liblzma
+      INSTALL_COMMAND ${CMAKE_COMMAND} --install . --config $<CONFIG> --component liblzma_Development
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
+      BUILD_IN_SOURCE 1
       BUILD_BYPRODUCTS ${LIBLZMA_LIBRARIES}
       TIMEOUT 600
     )
-    set(LIBLZMA_INCLUDE_DIR ${CMAKE_BINARY_DIR}/LZMA/src/LZMA/include)
+    set(LIBLZMA_INCLUDE_DIR ${CMAKE_BINARY_DIR}/include)
   else()
     if(CMAKE_CXX_COMPILER_ID MATCHES Clang)
       set(LIBLZMA_CFLAGS "-Wno-format-nonliteral")
@@ -335,7 +335,8 @@ if(builtin_lzma)
                         --with-pic --disable-shared --quiet
                         --disable-scripts --disable-xz --disable-xzdec --disable-lzmadec --disable-lzmainfo --disable-lzma-links
                         CC=${CMAKE_C_COMPILER} CXX=${CMAKE_CXX_COMPILER} CFLAGS=${LIBLZMA_CFLAGS} LDFLAGS=${LIBLZMA_LDFLAGS}
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 BUILD_IN_SOURCE 1
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
+      BUILD_IN_SOURCE 1
       BUILD_BYPRODUCTS ${LIBLZMA_LIBRARIES}
       TIMEOUT 600
     )
@@ -386,6 +387,7 @@ if(NOT builtin_zstd)
 endif()
 
 if(builtin_zstd)
+  list(APPEND ROOT_BUILTINS zstd)
   list(APPEND ROOT_BUILTINS ZSTD)
   add_subdirectory(builtins/zstd)
 endif()
@@ -440,26 +442,59 @@ if(asimage)
   endif()
 endif()
 if(asimage)
-  set(ASEXTRA_LIBRARIES)
-  find_Package(GIF)
-  if(GIF_FOUND)
-    set(ASEXTRA_LIBRARIES ${ASEXTRA_LIBRARIES} ${GIF_LIBRARIES})
+
+  if(NOT builtin_gif)
+    find_Package(GIF)
+    if(GIF_FOUND)
+      list(APPEND ASEXTRA_LIBRARIES GIF::GIF)
+    else()
+      if(fail-on-missing)
+          message(FATAL_ERROR "Dependency libgif not found. Please make sure it's installed on the system, or force the builtin libgif with '-Dbuiltin_gif=ON', or set '-Dfail-on-missing=OFF' to fall back to builtins if a dependency is not found.")
+      else()
+        set(builtin_gif ON CACHE BOOL "Enabled because needed for asimage" FORCE)
+      endif()
+    endif()
   endif()
-  find_Package(TIFF)
-  if(TIFF_FOUND)
-    set(ASEXTRA_LIBRARIES ${ASEXTRA_LIBRARIES} ${TIFF_LIBRARIES})
+
+  if(NOT builtin_png)
+    find_Package(PNG)
+    if(PNG_FOUND)
+      list(APPEND ASEXTRA_LIBRARIES PNG::PNG)
+      # apparently there will be two set of includes here (needs to be selected only last that was passed: PNG_INCLUDE_DIR)
+      list(GET PNG_INCLUDE_DIRS 0 PNG_INCLUDE_DIR)
+    else()
+      if(fail-on-missing)
+          message(FATAL_ERROR "Dependency libpng not found. Please make sure it's installed on the system, or force the builtin libpng with '-Dbuiltin_png=ON', or set '-Dfail-on-missing=OFF' to fall back to builtins if a dependency is not found.")
+      else()
+        set(builtin_png ON CACHE BOOL "Enabled because needed for asimage" FORCE)
+      endif()
+    endif()
   endif()
-  find_Package(PNG)
-  if(PNG_FOUND)
-    set(ASEXTRA_LIBRARIES ${ASEXTRA_LIBRARIES} ${PNG_LIBRARIES})
-    # Some missing variables needed for external PNG build
-    set(PNG_LIBRARY_RELEASE ${PNG_LIBRARY})
-    # apparently there will be two set of includes here (needs to be selected only last that was passed: PNG_INCLUDE_DIR)
-    list(GET PNG_INCLUDE_DIRS 0 PNG_INCLUDE_DIR)
+
+  if(NOT builtin_jpeg)
+    find_Package(JPEG)
+    if(JPEG_FOUND)
+      list(APPEND ASEXTRA_LIBRARIES JPEG::JPEG)
+    else()
+      if(fail-on-missing)
+          message(FATAL_ERROR "Dependency libjpeg not found. Please make sure it's installed on the system, or force the builtin libjpeg with '-Dbuiltin_jpeg=ON', or set '-Dfail-on-missing=OFF' to fall back to builtins if a dependency is not found.")
+      else()
+        set(builtin_jpeg ON CACHE BOOL "Enabled because needed for asimage" FORCE)
+      endif()
+    endif()
   endif()
-  find_Package(JPEG)
-  if(JPEG_FOUND)
-    set(ASEXTRA_LIBRARIES ${ASEXTRA_LIBRARIES} ${JPEG_LIBRARIES})
+
+  if(asimage_tiff)
+    find_Package(TIFF)
+    if(TIFF_FOUND)
+      list(APPEND ASEXTRA_LIBRARIES TIFF::TIFF)
+    else()
+      if(fail-on-missing)
+          message(FATAL_ERROR "Dependency libtiff not found. Please make sure it's installed on the system, or disable TIFF support with '-Dasimage_tiff=OFF', or set '-Dfail-on-missing=OFF' to automatically disable features")
+      else()
+        set(asimage_tiff OFF CACHE BOOL "Disabled because libtiff was not found" FORCE)
+      endif()
+    endif()
   endif()
 
   #---AfterImage---------------------------------------------------------------
@@ -483,40 +518,40 @@ if(asimage)
                  -DFREETYPE_INCLUDE_DIR=${FREETYPE_INCLUDE_DIR} -DZLIB_INCLUDE_DIR=${ZLIB_INCLUDE_DIR}
       BUILD_COMMAND ${CMAKE_COMMAND} --build . ${ASTEP_EXTRA_BUILD_ARGS}
       INSTALL_COMMAND  ${CMAKE_COMMAND} -E copy_if_different ${ASTEP_LIB_DIR}/libAfterImage.lib <INSTALL_DIR>/lib/
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 BUILD_IN_SOURCE 0
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
+      BUILD_IN_SOURCE 0
       BUILD_BYPRODUCTS ${AFTERIMAGE_LIBRARIES}
       TIMEOUT 600
     )
     set(AFTERIMAGE_INCLUDE_DIR ${CMAKE_BINARY_DIR}/AFTERIMAGE-prefix/src/AFTERIMAGE)
   else()
-    if(JPEG_FOUND)
-      set(_jpeginclude --with-jpeg-includes=${JPEG_INCLUDE_DIR})
+    if(NOT builtin_jpeg)
+      list(APPEND afterimage_extra_args --with-jpeg-includes=${JPEG_INCLUDE_DIR})
     else()
-      set(_jpeginclude --with-builtin-jpeg)
+      list(APPEND afterimage_extra_args --with-builtin-jpeg)
     endif()
-    if(GIF_FOUND)
-       set(_gifinclude  --with-gif --with-gif-includes=${GIF_INCLUDE_DIR} --without-builtin-gif)
+    if(NOT builtin_gif)
+      list(APPEND afterimage_extra_args --with-gif-includes=${GIF_INCLUDE_DIR} --without-builtin-gif)
     else()
-       set(_gifinclude)
+      list(APPEND afterimage_extra_args --with-builtin-ungif)
     endif()
-    if(PNG_FOUND)
-      set(_pnginclude  --with-png-includes=${PNG_INCLUDE_DIR})
+    if(NOT builtin_png)
+      list(APPEND afterimage_extra_args --with-png-includes=${PNG_INCLUDE_DIR})
     else()
-       set(_pnginclude  --with-builtin-png)
+      list(APPEND afterimage_extra_args --with-builtin-png)
     endif()
-    if(TIFF_FOUND)
-      set(_tiffinclude --with-tiff-includes=${TIFF_INCLUDE_DIR})
+    if(asimage_tiff)
+      list(APPEND afterimage_extra_args --with-tiff-includes=${TIFF_INCLUDE_DIR})
     else()
-      set(_tiffinclude --with-tiff=no)
+      list(APPEND afterimage_extra_args --with-tiff=no)
     endif()
-    if(cocoa)
-      set(_jpeginclude --without-x --with-builtin-jpeg)
-      set(_gifinclude  --with-builtin-ungif)
-      set(_pnginclude  --with-builtin-png)
-      set(_tiffinclude --with-tiff=no)
+    if(x11)
+      list(APPEND afterimage_extra_args --with-x)
+    else()
+      list(APPEND afterimage_extra_args --without-x)
     endif()
     if(builtin_freetype)
-      set(_ttf_include --with-ttf-includes=-I${FREETYPE_INCLUDE_DIR})
+      list(APPEND afterimage_extra_args --with-ttf-includes=-I${FREETYPE_INCLUDE_DIR})
       set(_after_cflags "${_after_cflags} -DHAVE_FREETYPE_FREETYPE -DPNG_ARM_NEON_OPT=0")
     endif()
     if(CMAKE_OSX_SYSROOT)
@@ -534,12 +569,14 @@ if(asimage)
       INSTALL_DIR ${CMAKE_BINARY_DIR}
       CONFIGURE_COMMAND ./configure --prefix <INSTALL_DIR>
                         --libdir=<INSTALL_DIR>/lib
-                        --with-ttf ${_ttf_include} --with-afterbase=no
-                        --without-svg --disable-glx ${_after_mmx}
-                        ${_gifinclude} --with-jpeg ${_jpeginclude}
-                        --with-png ${_pnginclude} ${_tiffinclude}
+                        --with-ttf --with-afterbase=no
+                        --without-svg --disable-glx
+                        --with-jpeg
+                        --with-png
+                        ${afterimage_extra_args}
                         CC=${CMAKE_C_COMPILER} CFLAGS=${_after_cflags}
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 BUILD_IN_SOURCE 1
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
+      BUILD_IN_SOURCE 1
       BUILD_BYPRODUCTS ${AFTERIMAGE_LIBRARIES}
       TIMEOUT 600
     )
@@ -598,7 +635,7 @@ if(mathmore OR builtin_gsl OR (tmva-cpu AND use_gsl_cblas))
                         CFLAGS=${CMAKE_C_FLAGS}
                         CPPFLAGS=${_gsl_cppflags}
                         LDFLAGS=${_gsl_ldflags}
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
       BUILD_BYPRODUCTS ${GSL_LIBRARIES}
       TIMEOUT 600
     )
@@ -606,7 +643,7 @@ if(mathmore OR builtin_gsl OR (tmva-cpu AND use_gsl_cblas))
     # FIXME: one need to find better way to extract path with GSL include files
     set(GSL_INCLUDE_DIR ${CMAKE_BINARY_DIR}/GSL-prefix/src/GSL-build)
     set(GSL_FOUND ON)
-    set(mathmore ON CACHE BOOL "Enabled because builtin_gls requested (${mathmore_description})" FORCE)
+    set(mathmore ON CACHE BOOL "Enabled because builtin_gsl requested (${mathmore_description})" FORCE)
   endif()
 endif()
 
@@ -678,7 +715,7 @@ if((opengl OR cocoa) AND NOT builtin_glew)
       # Bug in CMake on Mac OS X until 3.25:
       # https://gitlab.kitware.com/cmake/cmake/-/issues/19662
       # https://github.com/microsoft/vcpkg/pull/7967
-      message(FATAL_ERROR "Please enable builtin Glew due to a bug in CMake's FindGlew < v3.25 (use cmake option -Dbuiltin_glew=ON).")
+      message(FATAL_ERROR "Please enable builtin Glew due a bug in CMake's FindGlew < v3.25 (use cmake option -Dbuiltin_glew=ON).")
       unset(GLEW_FOUND)
     elseif(GLEW_FOUND AND NOT TARGET GLEW::GLEW)
       add_library(GLEW::GLEW UNKNOWN IMPORTED)
@@ -750,7 +787,7 @@ if(ssl AND NOT builtin_openssl)
   if(fail-on-missing)
     find_package(OpenSSL REQUIRED)
   else()
-    find_package(OpenSSL)
+    find_package(OpenSSL COMPONENTS SSL)
     if(NOT OPENSSL_FOUND)
       if(NOT APPLE) # builtin OpenSSL is only supported on macOS
         message(STATUS "Switching OFF 'ssl' option.")
@@ -898,7 +935,7 @@ if(builtin_fftw3)
     INSTALL_DIR ${CMAKE_BINARY_DIR}
     CONFIGURE_COMMAND ./configure --prefix=<INSTALL_DIR>
     BUILD_COMMAND make CFLAGS=-fPIC
-    LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+    LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
     BUILD_IN_SOURCE 1
     BUILD_BYPRODUCTS ${FFTW_LIBRARIES}
     TIMEOUT 600
@@ -1295,6 +1332,7 @@ if(builtin_tbb)
     URL_HASH SHA256=${tbb_sha256}
     INSTALL_DIR ${CMAKE_BINARY_DIR}
     CMAKE_ARGS -G ${CMAKE_GENERATOR}
+               -DCMAKE_POLICY_VERSION_MINIMUM=3.5
                -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                -DCMAKE_CXX_FLAGS=${ROOT_EXTERNAL_CXX_FLAGS}
@@ -1367,8 +1405,9 @@ if(vc AND NOT Vc_FOUND)
     URL_HASH SHA256=5933108196be44c41613884cd56305df320263981fe6a49e648aebb3354d57f3
     BUILD_IN_SOURCE 0
     BUILD_BYPRODUCTS ${Vc_LIBRARY}
-    LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+    LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
     CMAKE_ARGS -G ${CMAKE_GENERATOR}
+               -DCMAKE_POLICY_VERSION_MINIMUM=3.5
                -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
                -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
@@ -1461,7 +1500,7 @@ if(builtin_veccore)
     URL     ${VecCore_SRC_URI}
     URL_HASH SHA256=1268bca92acf00acd9775f1e79a2da7b1d902733d17e283e0dd5e02c41ac9666
     BUILD_IN_SOURCE 0
-    LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+    LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
     CMAKE_ARGS -G ${CMAKE_GENERATOR}
                -DBUILD_TESTING=OFF
                -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
@@ -1539,15 +1578,16 @@ if(vdt OR builtin_vdt)
     endif()
   endif()
   if(builtin_vdt)
-    set(vdt_version 0.4.4)
+    set(vdt_version 0.4.6)
     set(VDT_FOUND True)
     set(VDT_LIBRARIES ${CMAKE_BINARY_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}vdt${CMAKE_SHARED_LIBRARY_SUFFIX})
     ExternalProject_Add(
       VDT
       URL ${lcgpackages}/vdt-${vdt_version}.tar.gz
-      URL_HASH SHA256=8b1664b45ec82042152f89d171dd962aea9bb35ac53c8eebb35df1cb9c34e498
+      URL_HASH SHA256=1820feae446780763ec8bbb60a0dbcf3ae1ee548bdd01415b1fb905fd4f90c54
       INSTALL_DIR ${CMAKE_BINARY_DIR}
       CMAKE_ARGS
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5
         -DSSE=OFF # breaks on ARM without this
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -1555,7 +1595,7 @@ if(vdt OR builtin_vdt)
         -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS}
         -DCMAKE_CXX_FLAGS=${ROOT_EXTERNAL_CXX_FLAGS}
         -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
       BUILD_BYPRODUCTS ${VDT_LIBRARIES}
       TIMEOUT 600
     )
@@ -1720,6 +1760,13 @@ if(tmva)
     elseif(NOT Python3_NumPy_FOUND OR NOT Python3_Development_FOUND)
       message(STATUS "TMVA: Numpy or Python development package not found for python ${Python3_EXECUTABLE}. Switching off tmva-pymva option")
       set(tmva-pymva OFF CACHE BOOL "Disabled because Numpy or Python development package were not found (${tmva-pymva_description})" FORCE)
+    endif()
+    if(testing)
+      message(STATUS "Looking for BLAS as an optional testing dependency of PyMVA")
+      find_package(BLAS)
+      if(NOT BLAS_FOUND)
+        message(WARNING "BLAS not found: PyMVA will not be fully tested")
+      endif()
     endif()
   endif()
   if (R_FOUND)
@@ -1961,9 +2008,7 @@ if (builtin_gtest)
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS ${_gtest_byproducts}
     # Wrap download, configure and build steps in a script to log output
-    LOG_DOWNLOAD ON
-    LOG_CONFIGURE ON
-    LOG_BUILD ON
+    LOG_DOWNLOAD ON LOG_CONFIGURE ON LOG_BUILD ON LOG_OUTPUT_ON_FAILURE ON
     TIMEOUT 600
   )
 
@@ -2034,8 +2079,8 @@ if(webgui)
     else()
       ExternalProject_Add(
         OPENUI5
-        URL https://github.com/SAP/openui5/releases/download/1.98.0/openui5-runtime-1.98.0.zip
-        URL_HASH SHA256=3d3db9ba001141019aae2cdf6eb6d34d655a3652308e03a335794f1231d21d2f
+        URL https://github.com/SAP/openui5/releases/download/1.128.0/openui5-runtime-1.128.0.zip
+        URL_HASH SHA256=c58453c0f1021d56be70161b467f8c24c0ec888f3bd9c96919f4a04532c88266
         CONFIGURE_COMMAND ""
         BUILD_COMMAND ""
         INSTALL_COMMAND ""
